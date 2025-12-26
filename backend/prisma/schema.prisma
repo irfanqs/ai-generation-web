@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String?
+  credits   Int      @default(100)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  generations Generation[]
+}
+
+model Generation {
+  id          String   @id @default(uuid())
+  userId      String
+  type        String   // text-to-image, image-to-image, image-to-video, tts
+  prompt      String?
+  inputUrl    String?
+  outputUrl   String
+  status      String   @default("pending") // pending, processing, completed, failed
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([status])
+}
