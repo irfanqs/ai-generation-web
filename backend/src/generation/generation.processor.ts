@@ -19,6 +19,41 @@ export class GenerationProcessor {
     return buffer.toString('base64');
   }
 
+  private async convertPCMtoWAV(pcmBuffer: Buffer): Promise<Buffer> {
+    // Manual WAV header creation (more reliable than wav package)
+    const sampleRate = 24000;
+    const numChannels = 1;
+    const bitsPerSample = 16;
+    const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+    const blockAlign = numChannels * (bitsPerSample / 8);
+    const dataSize = pcmBuffer.length;
+    
+    // Create WAV header (44 bytes)
+    const header = Buffer.alloc(44);
+    
+    // RIFF chunk descriptor
+    header.write('RIFF', 0);
+    header.writeUInt32LE(36 + dataSize, 4);
+    header.write('WAVE', 8);
+    
+    // fmt sub-chunk
+    header.write('fmt ', 12);
+    header.writeUInt32LE(16, 16); // Subchunk1Size (16 for PCM)
+    header.writeUInt16LE(1, 20); // AudioFormat (1 for PCM)
+    header.writeUInt16LE(numChannels, 22);
+    header.writeUInt32LE(sampleRate, 24);
+    header.writeUInt32LE(byteRate, 28);
+    header.writeUInt16LE(blockAlign, 32);
+    header.writeUInt16LE(bitsPerSample, 34);
+    
+    // data sub-chunk
+    header.write('data', 36);
+    header.writeUInt32LE(dataSize, 40);
+    
+    // Combine header and PCM data
+    return Buffer.concat([header, pcmBuffer]);
+  }
+
   @Process('process')
   async handleGeneration(job: Job) {
     const { generationId, type, prompt, inputUrl } = job.data;
@@ -67,14 +102,41 @@ export class GenerationProcessor {
 
         case 'image-to-video':
           console.log('🎬 [Processor] Processing image-to-video...');
-          const videoData = await this.gemini.generateVideo(inputUrl, prompt);
-          outputUrl = await this.cloudinary.uploadBase64(videoData, 'video');
+          console.log('⚠️  [Processor] Note: This may take 1-2 minutes...');
+          
+          // For now, just use prompt without image (Veo text-to-video)
+          // TODO: Add image input support when available
+          const videoBase64 = await this.gemini.generateVideo(inputUrl, prompt);
+          console.log('✅ [Processor] Video generated, uploading to Cloudinary...');
+          
+          const videoDataUri = `data:video/mp4;base64,${videoBase64}`;
+          outputUrl = await this.cloudinary.uploadBase64(videoDataUri, 'video');
+          console.log('✅ [Processor] Uploaded to Cloudinary:', outputUrl);
           break;
 
         case 'text-to-speech':
           console.log('🎤 [Processor] Processing text-to-speech...');
           const audioBuffer = await this.gemini.textToSpeech(prompt);
-          outputUrl = await this.cloudinary.uploadBuffer(audioBuffer, 'raw');
+          console.log('✅ [Processor] Audio generated, size:', audioBuffer.length, 'bytes');
+          
+          // Convert raw PCM to proper WAV format with header
+          console.log('🔧 [Processor] Adding WAV header to PCM audio...');
+          const wavBuffer = await this.convertPCMtoWAV(audioBuffer);
+          console.log('✅ [Processor] WAV conversion complete, size:', wavBuffer.length, 'bytes');
+          
+          // Upload to Cloudinary as video (audio files are treated as video in Cloudinary)
+          const audioBase64 = wavBuffer.toString('base64');
+          const audioDataUri = `data:audio/wav;base64,${audioBase64}`;
+          
+          try {
+            outputUrl = await this.cloudinary.uploadBase64(audioDataUri, 'video');
+            console.log('✅ [Processor] Audio uploaded to Cloudinary:', outputUrl);
+          } catch (cloudinaryError) {
+            console.warn('⚠️  [Processor] Cloudinary upload failed, storing as data URI');
+            console.warn('Error:', cloudinaryError.message);
+            // Fallback: store as data URI in database
+            outputUrl = audioDataUri;
+          }
           break;
 
         default:

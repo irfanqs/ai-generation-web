@@ -17,18 +17,39 @@ export default function Navbar() {
           <div className="flex items-center gap-4">
             {user ? (
               <>
-                <Link href="/dashboard" className="text-gray-700 hover:text-indigo-600">
-                  Dashboard
-                </Link>
-                <span className="text-sm text-gray-600">
-                  Credits: {user.credits}
-                </span>
-                <button
-                  onClick={logout}
-                  className="px-4 py-2 text-sm text-gray-700 hover:text-indigo-600"
-                >
-                  Logout
-                </button>
+                {user.isAdmin ? (
+                  // Admin menu
+                  <>
+                    <Link href="/admin/dashboard" className="text-gray-700 hover:text-indigo-600">
+                      Admin Dashboard
+                    </Link>
+                    <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full font-semibold">
+                      Admin
+                    </span>
+                    <button
+                      onClick={logout}
+                      className="px-4 py-2 text-sm text-gray-700 hover:text-indigo-600"
+                    >
+                      Logout
+                    </button>
+                  </>
+                ) : (
+                  // Regular user menu
+                  <>
+                    <Link href="/dashboard" className="text-gray-700 hover:text-indigo-600">
+                      Dashboard
+                    </Link>
+                    <span className="text-sm text-gray-600">
+                      Credits: {user.credits}
+                    </span>
+                    <button
+                      onClick={logout}
+                      className="px-4 py-2 text-sm text-gray-700 hover:text-indigo-600"
+                    >
+                      Logout
+                    </button>
+                  </>
+                )}
               </>
             ) : (
               <>

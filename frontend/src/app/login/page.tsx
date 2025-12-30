@@ -22,7 +22,13 @@ export default function LoginPage() {
       const { data } = await api.post('/auth/login', { email, password })
       setAuth(data.user, data.token)
       toast.success('Login successful!')
-      router.push('/dashboard')
+      
+      // Redirect based on user role
+      if (data.user.isAdmin) {
+        router.push('/admin/dashboard')
+      } else {
+        router.push('/dashboard')
+      }
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Login failed')
     } finally {

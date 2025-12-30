@@ -7,21 +7,25 @@ const features = [
     icon: Image,
     title: 'Text to Image',
     description: 'Generate stunning images from text descriptions using advanced AI models.',
+    available: true,
   },
   {
     icon: Wand2,
     title: 'Image to Image',
     description: 'Transform and edit existing images with AI-powered modifications.',
+    available: true,
   },
   {
     icon: Video,
-    title: 'Image to Video',
-    description: 'Bring your images to life by converting them into dynamic videos.',
+    title: 'Text to Video',
+    description: 'Create dynamic videos from text descriptions using Google Veo AI.',
+    available: true,
   },
   {
     icon: Mic,
     title: 'Text to Speech',
-    description: 'Convert text into natural-sounding speech with multiple voice options.',
+    description: 'Convert text into natural-sounding speech with AI voices.',
+    available: true,
   },
 ]
 
@@ -42,9 +46,18 @@ export default function Features() {
           {features.map((feature, index) => (
             <div
               key={index}
-              className="p-6 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl hover:shadow-lg transition"
+              className={`p-6 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl hover:shadow-lg transition ${
+                !feature.available ? 'opacity-75' : ''
+              }`}
             >
-              <feature.icon className="w-12 h-12 text-indigo-600 mb-4" />
+              <div className="flex items-start justify-between mb-4">
+                <feature.icon className="w-12 h-12 text-indigo-600" />
+                {!feature.available && (
+                  <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-semibold">
+                    Coming Soon
+                  </span>
+                )}
+              </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
                 {feature.title}
               </h3>

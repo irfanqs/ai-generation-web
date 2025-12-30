@@ -46,12 +46,26 @@ export class CloudinaryService {
   }
 
   async uploadBuffer(buffer: Buffer, resourceType: 'image' | 'video' | 'raw' = 'raw'): Promise<string> {
+    console.log('☁️  [Cloudinary] Starting buffer upload...');
+    console.log('📦 [Cloudinary] Resource type:', resourceType);
+    console.log('📏 [Cloudinary] Buffer size:', buffer.length, 'bytes');
+    
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
-        { folder: 'ai-generations', resource_type: resourceType },
+        { 
+          folder: 'ai-generations', 
+          resource_type: resourceType,
+          // For raw files, don't specify format - let Cloudinary detect
+        },
         (error, result) => {
-          if (error) reject(error);
-          else resolve(result.secure_url);
+          if (error) {
+            console.error('💥 [Cloudinary] Buffer upload failed:', error);
+            reject(error);
+          } else {
+            console.log('✅ [Cloudinary] Buffer upload successful!');
+            console.log('🔗 [Cloudinary] URL:', result.secure_url);
+            resolve(result.secure_url);
+          }
         },
       );
       uploadStream.end(buffer);

@@ -39,7 +39,7 @@ export class AuthService {
     const token = this.jwtService.sign({ userId: user.id, email: user.email });
     
     return {
-      user: { id: user.id, email: user.email, name: user.name, credits: user.credits },
+      user: { id: user.id, email: user.email, name: user.name, credits: user.credits, isAdmin: user.isAdmin },
       token,
     };
   }
@@ -47,7 +47,7 @@ export class AuthService {
   async validateUser(userId: string) {
     return this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, name: true, credits: true },
+      select: { id: true, email: true, name: true, credits: true, isAdmin: true },
     });
   }
 }
