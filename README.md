@@ -23,6 +23,13 @@ cd backend
 npm install
 cp .env.example .env
 # Edit .env dengan credentials Anda
+
+# Setup database (WAJIB)
+npx prisma generate
+npx prisma db push
+
+
+# Jalankan server
 npm run start:dev
 ```
 
@@ -33,6 +40,17 @@ npm install
 cp .env.example .env.local
 # Edit .env.local dengan API URL
 npm run dev
+```
+
+### Database Setup (Supabase)
+1. Buat project di [supabase.com](https://supabase.com)
+2. Pergi ke **Settings** → **Database** → **Connection string** → pilih **URI**
+3. Copy connection string, ganti `[YOUR-PASSWORD]` dengan password database
+4. Paste ke `DATABASE_URL` di `backend/.env`
+
+Contoh:
+```
+DATABASE_URL=postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true
 ```
 
 ### Environment Variables
@@ -55,6 +73,11 @@ PORT=3001
 NEXT_PUBLIC_API_URL=http://localhost:3001
 ```
 
+## Akses Aplikasi
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:3001
+- Admin Login: `admin@aiplatform.com` / `admin123`
+
 ## Features ✅
 - ✅ Hero Section
 - ✅ Pricing Plans
@@ -75,5 +98,5 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 - Backend: Railway, Render, atau VPS
 - Frontend: Vercel
 - Database: Supabase (PostgreSQL)
-- Redis: Upstash (gratis tier)
+- Redis: Upstash
 - Storage: Cloudinary (10GB)
