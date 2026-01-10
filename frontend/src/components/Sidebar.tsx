@@ -4,19 +4,17 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
   Mic, 
-  Image, 
   Wand2, 
   Video, 
   Sparkles,
   User,
   Film,
-  Palette,
   Utensils,
   TestTube,
-  Users,
-  Lightbulb,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  History,
+  Play
 } from 'lucide-react';
 
 const menuItems = [
@@ -29,11 +27,15 @@ const menuItems = [
       { icon: Video, label: 'Veo 3 Prompter', subtitle: 'Video Prompting', href: '/dashboard/veo-prompter' },
       { icon: User, label: 'Create Karakter', subtitle: 'Character Design', href: '/dashboard/character' },
       { icon: Utensils, label: 'Food & Drink', subtitle: 'Culinary AI', href: '/dashboard/food' },
-      // tbd  
-      { icon: Image, label: 'Images Generator', subtitle: 'Gemini Imagen', href: '/dashboard/text-to-image' },
       { icon: Film, label: 'Affiliate Content', subtitle: 'Monetization Creator', href: '/dashboard/affiliate' },
       { icon: Sparkles, label: 'Create Animasi', subtitle: 'Juicy Anime', href: '/dashboard/animation' },
       { icon: TestTube, label: 'Google Labs', subtitle: 'New Features', href: '/dashboard/labs' },
+    ]
+  },
+  {
+    title: 'MY CONTENT',
+    items: [
+      { icon: History, label: 'Generation History', subtitle: 'View all results', href: '/dashboard/history' },
     ]
   }
 ];

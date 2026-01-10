@@ -36,3 +36,12 @@ model Generation {
   @@index([userId])
   @@index([status])
 }
+
+model SystemConfig {
+  id        String   @id @default("singleton")
+  key       String   @unique
+  value     String   @db.Text
+  metadata  Json?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}

@@ -2,9 +2,12 @@
 
 import Link from 'next/link'
 import { useAuthStore } from '@/store/authStore'
+import { useLanguage } from '@/contexts/LanguageContext'
+import LanguageSwitcher from './LanguageSwitcher'
 
 export default function Navbar() {
   const { user, logout } = useAuthStore()
+  const { t } = useLanguage()
 
   return (
     <nav className="bg-white shadow-sm">
@@ -15,10 +18,11 @@ export default function Navbar() {
           </Link>
           
           <div className="flex items-center gap-4">
+            <LanguageSwitcher />
+            
             {user ? (
               <>
                 {user.isAdmin ? (
-                  // Admin menu
                   <>
                     <Link href="/admin/dashboard" className="text-gray-700 hover:text-indigo-600">
                       Admin Dashboard
@@ -34,7 +38,6 @@ export default function Navbar() {
                     </button>
                   </>
                 ) : (
-                  // Regular user menu
                   <>
                     <Link href="/dashboard" className="text-gray-700 hover:text-indigo-600">
                       Dashboard
@@ -54,13 +57,13 @@ export default function Navbar() {
             ) : (
               <>
                 <Link href="/login" className="text-gray-700 hover:text-indigo-600">
-                  Login
+                  {t('login')}
                 </Link>
                 <Link
                   href="/register"
                   className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                 >
-                  Sign Up
+                  {t('getStarted')}
                 </Link>
               </>
             )}

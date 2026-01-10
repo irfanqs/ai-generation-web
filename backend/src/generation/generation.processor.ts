@@ -116,7 +116,9 @@ export class GenerationProcessor {
 
         case 'text-to-speech':
           console.log('🎤 [Processor] Processing text-to-speech...');
-          const audioBuffer = await this.gemini.textToSpeech(prompt);
+          const voice = job.data.metadata?.voice || 'Kore';
+          console.log('🎙️ [Processor] Using voice:', voice);
+          const audioBuffer = await this.gemini.textToSpeech(prompt, voice);
           console.log('✅ [Processor] Audio generated, size:', audioBuffer.length, 'bytes');
           
           // Convert raw PCM to proper WAV format with header

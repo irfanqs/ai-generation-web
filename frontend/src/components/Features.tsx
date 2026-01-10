@@ -1,44 +1,47 @@
 'use client'
 
 import { Image, Video, Mic, Wand2 } from 'lucide-react'
-
-const features = [
-  {
-    icon: Image,
-    title: 'Text to Image',
-    description: 'Generate stunning images from text descriptions using advanced AI models.',
-    available: true,
-  },
-  {
-    icon: Wand2,
-    title: 'Image to Image',
-    description: 'Transform and edit existing images with AI-powered modifications.',
-    available: true,
-  },
-  {
-    icon: Video,
-    title: 'Text to Video',
-    description: 'Create dynamic videos from text descriptions using Google Veo AI.',
-    available: true,
-  },
-  {
-    icon: Mic,
-    title: 'Text to Speech',
-    description: 'Convert text into natural-sounding speech with AI voices.',
-    available: true,
-  },
-]
+import { useLanguage } from '@/contexts/LanguageContext'
 
 export default function Features() {
+  const { t } = useLanguage();
+
+  const features = [
+    {
+      icon: Image,
+      title: t('featureTextToImage'),
+      description: t('featureTextToImageDesc'),
+      available: true,
+    },
+    {
+      icon: Wand2,
+      title: t('featureImageToImage'),
+      description: t('featureImageToImageDesc'),
+      available: true,
+    },
+    {
+      icon: Video,
+      title: t('featureTextToVideo'),
+      description: t('featureTextToVideoDesc'),
+      available: true,
+    },
+    {
+      icon: Mic,
+      title: t('featureTextToSpeech'),
+      description: t('featureTextToSpeechDesc'),
+      available: true,
+    },
+  ];
+
   return (
     <div id="features" className="py-24 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="text-4xl font-bold text-gray-900 mb-4">
-            Powerful AI Features
+            {t('featuresTitle')}
           </h2>
           <p className="text-xl text-gray-600">
-            Everything you need to create amazing content
+            {t('featuresSubtitle')}
           </p>
         </div>
 

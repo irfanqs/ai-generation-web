@@ -4,14 +4,15 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Sparkles } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 export default function Hero() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { t } = useLanguage();
 
   const handleGetStarted = () => {
     if (user) {
-      // Redirect admin to admin dashboard, regular users to user dashboard
       if (user.isAdmin) {
         router.push('/admin/dashboard');
       } else {
@@ -31,13 +32,11 @@ export default function Hero() {
           </div>
           
           <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
-            Create Amazing Content
-            <span className="block text-indigo-600">with AI Power</span>
+            {t('heroTitle')}
           </h1>
           
           <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-            Generate stunning images, videos, and audio with cutting-edge AI technology.
-            Transform your ideas into reality in seconds.
+            {t('heroSubtitle')}
           </p>
           
           <div className="flex gap-4 justify-center">
@@ -45,13 +44,13 @@ export default function Hero() {
               onClick={handleGetStarted}
               className="px-8 py-4 bg-indigo-600 text-white rounded-lg text-lg font-semibold hover:bg-indigo-700 transition"
             >
-              {user ? 'Go to Dashboard' : 'Get Started Free'}
+              {user ? 'Dashboard' : t('startFree')}
             </button>
             <Link
-              href="#features"
+              href="#pricing"
               className="px-8 py-4 bg-white text-indigo-600 rounded-lg text-lg font-semibold border-2 border-indigo-600 hover:bg-indigo-50 transition"
             >
-              Learn More
+              {t('viewPricing')}
             </Link>
           </div>
         </div>

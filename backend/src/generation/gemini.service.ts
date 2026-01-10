@@ -219,19 +219,20 @@ export class GeminiService {
     }
   }
 
-  async textToSpeech(text: string): Promise<Buffer> {
+  async textToSpeech(text: string, voice: string = 'Kore'): Promise<Buffer> {
     console.log('🎤 [GeminiService] Starting text-to-speech...');
     console.log('📝 [GeminiService] Text:', text);
+    console.log('🎙️ [GeminiService] Voice:', voice);
     
     try {
       const response = await this.ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-tts',
-        contents: [{ parts: [{ text: `Say cheerfully: ${text}` }] }],
+        contents: [{ parts: [{ text }] }],
         config: {
           responseModalities: ['AUDIO'],
           speechConfig: {
             voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'Kore' },
+              prebuiltVoiceConfig: { voiceName: voice },
             },
           },
         },
