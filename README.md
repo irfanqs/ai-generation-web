@@ -71,11 +71,9 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 
 **All features are fully implemented and working!** 🎉
 
-See [COMPLETE_FEATURES.md](COMPLETE_FEATURES.md) for detailed documentation.
-
 ## Deployment Ready
 - Backend: Railway, Render, atau VPS
 - Frontend: Vercel
-- Database: Supabase (PostgreSQL gratis)
+- Database: Supabase (PostgreSQL)
 - Redis: Upstash (gratis tier)
-- Storage: Cloudinary (10GB gratis)
+- Storage: Cloudinary (10GB)
