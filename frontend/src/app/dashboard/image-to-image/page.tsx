@@ -33,7 +33,7 @@ const POSES = [
 ];
 
 export default function ImageToImagePage() {
-  const { user } = useAuthStore();
+  const { user, updateCredits } = useAuthStore();
   const [productImage, setProductImage] = useState<File | null>(null);
   const [productPreview, setProductPreview] = useState<string | null>(null);
   const [modelImage, setModelImage] = useState<File | null>(null);
@@ -133,22 +133,24 @@ export default function ImageToImagePage() {
         setProgress(Math.round(((i + 1) / totalPoses) * 100));
 
         // Create prompt for each pose
-        let prompt = `Professional product photography. ${pose}. `;
-        prompt += `Gender: ${selectedGender}. `;
-        prompt += `Aspect ratio: ${selectedRatio}. `;
+        let prompt = `Generate a professional product photography image. `;
+        prompt += `Show a ${selectedGender === 'female' ? 'female' : selectedGender === 'male' ? 'male' : ''} model in ${pose} pose. `;
+        prompt += `The model should be holding/wearing/using the product shown in the first image. `;
         if (interactionPrompt) {
-          prompt += `Interaction: ${interactionPrompt}. `;
+          prompt += `Specific interaction: ${interactionPrompt}. `;
         }
         if (modelImage) {
-          prompt += `Use the reference model appearance. `;
+          prompt += `CRITICAL REQUIREMENT - MODEL REFERENCE: The person in the output image MUST be an EXACT copy of the reference person in the second image. DO NOT change ANYTHING about the reference person - keep the EXACT same: face, facial features, skin tone, hair style, hair color, body shape, clothing, outfit, accessories, makeup, and overall appearance. The reference person must appear IDENTICAL in every detail. Only change their pose to ${pose} and add the product from the first image. `;
         }
-        prompt += `High quality, professional lighting, clean background.`;
+        prompt += `Output aspect ratio: ${selectedRatio}. `;
+        prompt += `High quality, professional studio lighting, clean white/neutral background, commercial photography style.`;
 
         // Upload product image
         const formData = new FormData();
-        formData.append('file', productImage);
+        formData.append('image', productImage);
         formData.append('prompt', prompt);
         
+        // Add model reference if provided
         if (modelImage) {
           formData.append('modelImage', modelImage);
         }
@@ -194,6 +196,15 @@ export default function ImageToImagePage() {
 
       setGeneratedImages(results);
       toast.success(`Berhasil generate ${results.length} pose!`);
+      
+      // Refresh user credits from server
+      try {
+        const userRes = await axios.get('/auth/me');
+        updateCredits(userRes.data.credits);
+      } catch (e) {
+        console.error('Failed to refresh credits:', e);
+      }
+      
       setIsGenerating(false);
 
     } catch (error: any) {

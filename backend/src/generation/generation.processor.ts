@@ -92,7 +92,17 @@ export class GenerationProcessor {
           const inputImageBase64 = await this.downloadImageAsBase64(inputUrl);
           console.log('✅ [Processor] Downloaded input image');
           
-          const editedImageBase64 = await this.gemini.editImage(inputImageBase64, prompt);
+          // Check if there's a model reference image
+          const modelImageBase64 = job.data.metadata?.modelImageBuffer;
+          if (modelImageBase64) {
+            console.log('👤 [Processor] Model reference image provided');
+          }
+          
+          const editedImageBase64 = await this.gemini.editImage(
+            inputImageBase64, 
+            prompt,
+            modelImageBase64, // Pass model reference
+          );
           console.log('✅ [Processor] Image edited, uploading to Cloudinary...');
           
           const editedDataUri = `data:image/png;base64,${editedImageBase64}`;

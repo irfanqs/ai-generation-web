@@ -1,5 +1,5 @@
-import { Controller, Post, Body, UseGuards, Request, Get, Param, UseInterceptors, UploadedFile, Query } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { Controller, Post, Body, UseGuards, Request, Get, Param, UseInterceptors, UploadedFile, UploadedFiles, Query } from '@nestjs/common';
+import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { NonAdminGuard } from './non-admin.guard';
 import { GenerationService } from './generation.service';
@@ -45,18 +45,28 @@ export class GenerationController {
 
   @Post('image-to-image')
   @UseGuards(NonAdminGuard)
-  @UseInterceptors(FileInterceptor('image'))
+  @UseInterceptors(FileFieldsInterceptor([
+    { name: 'image', maxCount: 1 },
+    { name: 'modelImage', maxCount: 1 },
+  ]))
   async imageToImage(
     @Request() req,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFiles() files: { image?: Express.Multer.File[], modelImage?: Express.Multer.File[] },
     @Body() body: { prompt: string; metadata?: any },
   ) {
+    const productImage = files.image?.[0];
+    const modelImage = files.modelImage?.[0];
+    
     return this.generationService.createGeneration(
       req.user.id,
       'image-to-image',
       body.prompt,
-      file,
-      body.metadata,
+      productImage,
+      { 
+        ...body.metadata, 
+        hasModelReference: !!modelImage,
+        modelImageBuffer: modelImage ? modelImage.buffer.toString('base64') : null,
+      },
     );
   }
 

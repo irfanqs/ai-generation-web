@@ -77,25 +77,40 @@ export class GeminiService {
     }
   }
 
-  async editImage(imageBase64: string, prompt: string): Promise<string> {
+  async editImage(imageBase64: string, prompt: string, modelReferenceBase64?: string): Promise<string> {
     console.log('✏️  [GeminiService] Starting image editing...');
     console.log('📝 [GeminiService] Prompt:', prompt);
+    console.log('👤 [GeminiService] Has model reference:', !!modelReferenceBase64);
     
     try {
       const modelName = 'gemini-2.5-flash-image';
       const url = `${this.baseUrl}/models/${modelName}:generateContent?key=${this.apiKey}`;
       
+      // Build parts array
+      const parts: any[] = [{ text: prompt }];
+      
+      // Add main product image
+      parts.push({
+        inlineData: {
+          mimeType: 'image/jpeg',
+          data: imageBase64,
+        }
+      });
+      
+      // Add model reference image if provided
+      if (modelReferenceBase64) {
+        parts.push({
+          inlineData: {
+            mimeType: 'image/jpeg',
+            data: modelReferenceBase64,
+          }
+        });
+        console.log('✅ [GeminiService] Model reference image added to request');
+      }
+      
       const response = await axios.post(url, {
         contents: [{
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType: 'image/jpeg',
-                data: imageBase64,
-              }
-            }
-          ]
+          parts: parts
         }]
       });
 

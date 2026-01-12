@@ -35,7 +35,7 @@ const VOICE_FILTERS = [
 ];
 
 export default function TTSPage() {
-  const { user } = useAuthStore();
+  const { user, updateCredits } = useAuthStore();
   const [text, setText] = useState('');
   const [selectedGender, setSelectedGender] = useState('Semua');
   const [selectedCharacter, setSelectedCharacter] = useState('Semua');
@@ -134,6 +134,15 @@ export default function TTSPage() {
             // Set audio URL
             setAudioUrl(generation.outputUrl);
             toast.success('Audio berhasil dibuat!');
+            
+            // Refresh user credits from server
+            try {
+              const userRes = await axios.get('/auth/me');
+              updateCredits(userRes.data.credits);
+            } catch (e) {
+              console.error('Failed to refresh credits:', e);
+            }
+            
             setIsGenerating(false);
           } else if (generation.status === 'failed') {
             clearInterval(pollInterval);
