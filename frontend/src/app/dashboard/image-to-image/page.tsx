@@ -120,6 +120,12 @@ export default function ImageToImagePage() {
       return;
     }
 
+    const totalCost = selectedPoses.length * 4;
+    if ((user?.credits || 0) < totalCost) {
+      toast.error(`Credits tidak cukup! Butuh ${totalCost} credits, tersisa ${user?.credits || 0}`);
+      return;
+    }
+
     setIsGenerating(true);
     setProgress(0);
     setGeneratedImages([]);
@@ -445,7 +451,7 @@ export default function ImageToImagePage() {
             ) : (
               <>
                 <Grid3x3 className="w-5 h-5" />
-                Generate {selectedPoses.length} Pose
+                Generate {selectedPoses.length} Pose ({selectedPoses.length * 4} credits)
               </>
             )}
           </button>
@@ -513,7 +519,7 @@ export default function ImageToImagePage() {
       <div className="mt-6 text-center text-sm text-gray-500">
         Credits tersisa: <span className="font-semibold" style={{ color: '#4f46e5' }}>{user?.credits || 0}</span>
         <span className="mx-2">•</span>
-        <span>Setiap pose = 1 credit</span>
+        <span>Setiap pose = 4 credits</span>
       </div>
     </div>
   );
