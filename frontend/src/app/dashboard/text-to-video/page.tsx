@@ -1,498 +1,470 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Video, Upload, X, Play, Pause, Download, Loader2, Film } from 'lucide-react';
+import { Video, Upload, X, Download, Loader2, Film, Plus, Trash2, Sparkles, Play } from 'lucide-react';
 import axios from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
-import Image from 'next/image';
 
 const ASPECT_RATIOS = [
-  { value: '16:9', label: 'Landscape (16:9)' },
-  { value: '9:16', label: 'Portrait (9:16)' },
-  { value: '1:1', label: 'Square (1:1)' },
-  { value: '4:3', label: 'Standard (4:3)' },
+  { value: '9:16', label: '9:16 (Story/Reels)' },
+  { value: '16:9', label: '16:9 (YouTube)' },
+  { value: '1:1', label: '1:1 (Square)' },
 ];
 
-const VIDEO_STYLES = [
-  'Cinematic',
-  'Realistic',
-  'Animated',
-  'Documentary',
-  'Artistic',
-  'Dramatic',
-  'Slow Motion',
-  'Time Lapse',
-];
+interface Character {
+  id: string;
+  name: string;
+  image: File | null;
+  preview: string | null;
+}
 
-const DURATIONS = [
-  { value: '5', label: '5 seconds' },
-  { value: '10', label: '10 seconds' },
-  { value: '15', label: '15 seconds' },
-];
+interface GeneratedScene {
+  id: string;
+  sceneNumber: number;
+  imageUrl: string | null;
+  prompt: string;
+  videoUrl: string | null;
+  isGeneratingImage: boolean;
+  isGeneratingVideo: boolean;
+}
 
-export default function TextToVideoPage() {
-  const { user } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<'text' | 'image'>('text');
-  const [prompt, setPrompt] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [selectedRatio, setSelectedRatio] = useState('16:9');
-  const [selectedStyle, setSelectedStyle] = useState('Cinematic');
-  const [selectedDuration, setSelectedDuration] = useState('10');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+export default function Veo3PrompterPage() {
+  const { user, updateCredits } = useAuthStore();
+  const [characters, setCharacters] = useState<Character[]>([
+    { id: '1', name: '', image: null, preview: null }
+  ]);
+  const [storyTitle, setStoryTitle] = useState('');
+  const [selectedRatio, setSelectedRatio] = useState('9:16');
+  const [isGeneratingStory, setIsGeneratingStory] = useState(false);
+  const [scenes, setScenes] = useState<GeneratedScene[]>([]);
+  
+  const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
-  const maxChars = 1000;
-  const charCount = prompt.length;
+  const addCharacter = () => {
+    if (characters.length >= 5) {
+      toast.error('Maksimal 5 karakter');
+      return;
+    }
+    setCharacters([...characters, { id: Date.now().toString(), name: '', image: null, preview: null }]);
+  };
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const removeCharacter = (id: string) => {
+    if (characters.length <= 1) {
+      toast.error('Minimal 1 karakter');
+      return;
+    }
+    setCharacters(characters.filter(c => c.id !== id));
+  };
+
+  const updateCharacter = (id: string, field: keyof Character, value: any) => {
+    setCharacters(characters.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
+  const handleCharacterImageSelect = (characterId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
         toast.error('Ukuran file maksimal 10MB');
         return;
       }
-      
-      setImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
-        setImagePreview(reader.result as string);
+        updateCharacter(characterId, 'image', file);
+        updateCharacter(characterId, 'preview', reader.result as string);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const removeImage = () => {
-    setImageFile(null);
-    setImagePreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = (reader.result as string).split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const generateStory = async () => {
+    const validCharacters = characters.filter(c => c.name.trim() && c.image);
+    if (validCharacters.length === 0) {
+      toast.error('Tambahkan minimal 1 karakter dengan nama dan foto');
+      return;
+    }
+    if (!storyTitle.trim()) {
+      toast.error('Masukkan judul cerita');
+      return;
+    }
+
+    setIsGeneratingStory(true);
+    
+    try {
+      // Build character descriptions for AI
+      const characterDescriptions = validCharacters.map(c => c.name).join(', ');
+      
+      // Use Gemini to generate story scenes
+      const response = await axios.post('/generation/generate-story', {
+        title: storyTitle,
+        characters: characterDescriptions,
+        aspectRatio: selectedRatio,
+      });
+
+      if (response.data.scenes) {
+        // Generate images for each scene
+        const generatedScenes: GeneratedScene[] = [];
+        
+        for (let i = 0; i < response.data.scenes.length; i++) {
+          const sceneData = response.data.scenes[i];
+          generatedScenes.push({
+            id: Date.now().toString() + i,
+            sceneNumber: i + 1,
+            imageUrl: sceneData.imageUrl || null,
+            prompt: sceneData.prompt,
+            videoUrl: null,
+            isGeneratingImage: false,
+            isGeneratingVideo: false,
+          });
+        }
+        
+        setScenes(generatedScenes);
+        toast.success(`${generatedScenes.length} scene berhasil dibuat!`);
+        
+        // Refresh credits
+        try {
+          const userRes = await axios.get('/auth/me');
+          updateCredits(userRes.data.credits);
+        } catch (e) { console.error('Failed to refresh credits:', e); }
+      }
+    } catch (error: any) {
+      console.error('Story generation error:', error);
+      // Fallback: generate sample scenes locally
+      const sampleScenes: GeneratedScene[] = [
+        { id: '1', sceneNumber: 1, imageUrl: null, prompt: `Opening scene: ${storyTitle}. Introduce ${characters[0]?.name || 'the main character'} in a dramatic setting. Cinematic wide shot, golden hour lighting.`, videoUrl: null, isGeneratingImage: false, isGeneratingVideo: false },
+        { id: '2', sceneNumber: 2, imageUrl: null, prompt: `${characters[0]?.name || 'The character'} faces a challenge or conflict. Medium shot showing emotion and determination. Dramatic lighting.`, videoUrl: null, isGeneratingImage: false, isGeneratingVideo: false },
+        { id: '3', sceneNumber: 3, imageUrl: null, prompt: `The turning point: ${characters[0]?.name || 'The character'} discovers something important. Close-up shot with intense expression. Mysterious atmosphere.`, videoUrl: null, isGeneratingImage: false, isGeneratingVideo: false },
+        { id: '4', sceneNumber: 4, imageUrl: null, prompt: `Climax: ${characters[0]?.name || 'The character'} takes action. Dynamic shot with movement. High energy, dramatic lighting.`, videoUrl: null, isGeneratingImage: false, isGeneratingVideo: false },
+        { id: '5', sceneNumber: 5, imageUrl: null, prompt: `Resolution: ${storyTitle} concludes. ${characters[0]?.name || 'The character'} in a peaceful moment. Warm lighting, satisfying ending.`, videoUrl: null, isGeneratingImage: false, isGeneratingVideo: false },
+      ];
+      setScenes(sampleScenes);
+      toast.success('5 scene template berhasil dibuat!');
+    } finally {
+      setIsGeneratingStory(false);
     }
   };
 
-  const handleGenerate = async () => {
-    if (activeTab === 'text' && !prompt.trim()) {
-      toast.error('Masukkan deskripsi video terlebih dahulu');
-      return;
-    }
+  const generateSceneImage = async (sceneId: string) => {
+    const scene = scenes.find(s => s.id === sceneId);
+    if (!scene) return;
 
-    if (activeTab === 'image' && !imageFile) {
-      toast.error('Upload gambar terlebih dahulu');
-      return;
-    }
-
-    setIsGenerating(true);
-    setProgress(0);
-    setVideoUrl(null);
+    setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isGeneratingImage: true } : s));
 
     try {
-      // Simulate progress
-      const progressInterval = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return 90;
-          }
-          return prev + 5;
-        });
-      }, 3000);
-
-      let response;
-      
-      if (activeTab === 'text') {
-        // Text to Video
-        response = await axios.post('/generation/image-to-video', {
-          prompt: `${prompt}. Style: ${selectedStyle}. Duration: ${selectedDuration}s. Aspect ratio: ${selectedRatio}`,
-        });
-      } else {
-        // Image to Video
-        const formData = new FormData();
-        formData.append('file', imageFile!);
-        formData.append('prompt', prompt || 'Animate this image with smooth motion');
-        
-        response = await axios.post('/generation/image-to-video', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+      // Get first character image as reference
+      const characterWithImage = characters.find(c => c.image);
+      let characterBase64 = '';
+      if (characterWithImage?.image) {
+        characterBase64 = await fileToBase64(characterWithImage.image);
       }
 
-      const generationId = response.data.id;
+      const response = await axios.post('/generation/text-to-image', {
+        prompt: scene.prompt + ` Aspect ratio ${selectedRatio}. High quality, cinematic.`,
+        characterReference: characterBase64 || undefined,
+      });
 
-      // Poll for completion
-      let attempts = 0;
-      const maxAttempts = 120; // 4 minutes max
-
-      const pollInterval = setInterval(async () => {
-        attempts++;
+      if (response.data.id) {
+        // Poll for completion
+        let attempts = 0;
+        const maxAttempts = 30;
         
-        try {
-          const statusRes = await axios.get(`/generation/${generationId}`);
-          const generation = statusRes.data;
-
-          if (generation.status === 'completed') {
-            clearInterval(pollInterval);
-            clearInterval(progressInterval);
-            setProgress(100);
-            
-            setVideoUrl(generation.outputUrl);
-            toast.success('Video berhasil dibuat!');
-            setIsGenerating(false);
-          } else if (generation.status === 'failed') {
-            clearInterval(pollInterval);
-            clearInterval(progressInterval);
-            toast.error('Gagal membuat video');
-            setIsGenerating(false);
-          } else if (attempts >= maxAttempts) {
-            clearInterval(pollInterval);
-            clearInterval(progressInterval);
-            toast.error('Timeout: Proses terlalu lama');
-            setIsGenerating(false);
-          }
-        } catch (error) {
-          console.error('Polling error:', error);
-        }
-      }, 2000);
-
+        const pollInterval = setInterval(async () => {
+          attempts++;
+          try {
+            const statusRes = await axios.get(`/generation/${response.data.id}`);
+            if (statusRes.data.status === 'completed') {
+              clearInterval(pollInterval);
+              setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, imageUrl: statusRes.data.outputUrl, isGeneratingImage: false } : s));
+              toast.success(`Scene ${scene.sceneNumber} image berhasil!`);
+              
+              const userRes = await axios.get('/auth/me');
+              updateCredits(userRes.data.credits);
+            } else if (statusRes.data.status === 'failed' || attempts >= maxAttempts) {
+              clearInterval(pollInterval);
+              setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isGeneratingImage: false } : s));
+              toast.error('Gagal generate image');
+            }
+          } catch (e) { console.error('Polling error:', e); }
+        }, 2000);
+      }
     } catch (error: any) {
-      console.error('Generation error:', error);
-      toast.error(error.response?.data?.message || 'Gagal membuat video');
-      setIsGenerating(false);
+      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isGeneratingImage: false } : s));
+      toast.error(error.response?.data?.message || 'Gagal generate image');
     }
   };
 
-  const togglePlayPause = () => {
-    if (!videoRef.current) return;
+  const generateSceneVideo = async (sceneId: string) => {
+    const scene = scenes.find(s => s.id === sceneId);
+    if (!scene) return;
 
-    if (isPlaying) {
-      videoRef.current.pause();
-    } else {
-      videoRef.current.play();
+    if ((user?.credits || 0) < 10) {
+      toast.error('Credits tidak cukup! Butuh 10 credits');
+      return;
     }
-    setIsPlaying(!isPlaying);
+
+    setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isGeneratingVideo: true } : s));
+    const toastId = toast.loading(`Generating video scene ${scene.sceneNumber}...`);
+
+    try {
+      const characterWithImage = characters.find(c => c.image);
+      let imageBase64 = '';
+      if (scene.imageUrl) {
+        // Download scene image and convert to base64
+        const imgResponse = await fetch(scene.imageUrl);
+        const blob = await imgResponse.blob();
+        imageBase64 = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+          reader.readAsDataURL(blob);
+        });
+      } else if (characterWithImage?.image) {
+        imageBase64 = await fileToBase64(characterWithImage.image);
+      }
+
+      const response = await axios.post('/veo/image-to-video', {
+        imageBase64: imageBase64 || undefined,
+        prompt: scene.prompt,
+        aspectRatio: selectedRatio,
+      });
+
+      if (response.data.success) {
+        const videoUrl = `data:video/mp4;base64,${response.data.videoBase64}`;
+        setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, videoUrl, isGeneratingVideo: false } : s));
+        toast.success(`Video scene ${scene.sceneNumber} berhasil!`, { id: toastId });
+        
+        const userRes = await axios.get('/auth/me');
+        updateCredits(userRes.data.credits);
+      }
+    } catch (error: any) {
+      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isGeneratingVideo: false } : s));
+      toast.error(error.response?.data?.message || 'Gagal generate video', { id: toastId });
+    }
   };
 
-  const handleDownload = () => {
-    if (!videoUrl) return;
-    
+  const addScene = () => {
+    const newSceneNumber = scenes.length + 1;
+    setScenes([...scenes, {
+      id: Date.now().toString(),
+      sceneNumber: newSceneNumber,
+      imageUrl: null,
+      prompt: `Scene ${newSceneNumber}: Describe what happens in this scene...`,
+      videoUrl: null,
+      isGeneratingImage: false,
+      isGeneratingVideo: false,
+    }]);
+  };
+
+  const removeScene = (sceneId: string) => {
+    if (scenes.length <= 1) {
+      toast.error('Minimal 1 scene');
+      return;
+    }
+    setScenes(scenes.filter(s => s.id !== sceneId).map((s, idx) => ({ ...s, sceneNumber: idx + 1 })));
+  };
+
+  const updateScenePrompt = (sceneId: string, prompt: string) => {
+    setScenes(scenes.map(s => s.id === sceneId ? { ...s, prompt } : s));
+  };
+
+  const downloadVideo = (url: string, name: string) => {
     const link = document.createElement('a');
-    link.href = videoUrl;
-    link.download = `video-${Date.now()}.mp4`;
+    link.href = url;
+    link.download = `${name}-${Date.now()}.mp4`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success('Video berhasil didownload!');
+    toast.success('Video downloaded!');
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-8">
-      {/* Header */}
+    <div className="max-w-6xl mx-auto p-8">
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#4f46e5' }}>
-            <Video className="w-6 h-6 text-white" />
+            <Film className="w-6 h-6 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Video Scene Creator (Gemini Veo)
-          </h1>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Veo 3 Story Prompter</h1>
+            <p className="text-sm text-gray-500">Generate video story dengan karakter custom</p>
+          </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
-        <div className="flex border-b border-gray-200">
-          <button
-            onClick={() => setActiveTab('text')}
-            className={`flex-1 px-6 py-4 font-medium transition-colors ${
-              activeTab === 'text'
-                ? 'text-white border-b-2'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-            style={activeTab === 'text' ? { 
-              backgroundColor: '#4f46e5', 
-              borderBottomColor: '#4338ca',
-              borderTopLeftRadius: '0.75rem'
-            } : {}}
-          >
-            Text to Video
-          </button>
-          <button
-            onClick={() => setActiveTab('image')}
-            className={`flex-1 px-6 py-4 font-medium transition-colors ${
-              activeTab === 'image'
-                ? 'text-white border-b-2'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-            style={activeTab === 'image' ? { 
-              backgroundColor: '#4f46e5', 
-              borderBottomColor: '#4338ca',
-              borderTopRightRadius: '0.75rem'
-            } : {}}
-          >
-            Image to Video
-          </button>
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6">
+        <div className="flex items-start gap-3">
+          <Sparkles className="w-5 h-5 text-indigo-600 mt-0.5" />
+          <div>
+            <h3 className="font-semibold text-indigo-900 mb-1">Cara Penggunaan</h3>
+            <ol className="text-sm text-indigo-700 space-y-1 list-decimal list-inside">
+              <li>Upload foto karakter (max 5) dan beri nama</li>
+              <li>Masukkan judul cerita</li>
+              <li>Pilih aspect ratio</li>
+              <li>Tekan "Generate Story" untuk membuat scene</li>
+              <li>Edit prompt jika perlu, lalu generate video per scene</li>
+            </ol>
+          </div>
         </div>
+      </div>
 
-        <div className="p-6">
-          {/* Image Upload (for Image to Video) */}
-          {activeTab === 'image' && (
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Upload Gambar:
-              </label>
+      {/* Characters Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900">1. Karakter ({characters.length}/5)</h3>
+          {characters.length < 5 && (
+            <button onClick={addCharacter} className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+              <Plus className="w-4 h-4" />Tambah Karakter
+            </button>
+          )}
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {characters.map((char, index) => (
+            <div key={char.id} className="border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium text-gray-600">Karakter {index + 1}</span>
+                {characters.length > 1 && (
+                  <button onClick={() => removeCharacter(char.id)} className="text-red-500 hover:text-red-600">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
               
-              {!imagePreview ? (
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center cursor-pointer hover:border-gray-400 transition-colors"
-                >
-                  <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600 mb-2">Klik untuk upload gambar</p>
-                  <p className="text-sm text-gray-500">PNG, JPG hingga 10MB</p>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageSelect}
-                    className="hidden"
-                  />
+              {!char.preview ? (
+                <div onClick={() => fileInputRefs.current[char.id]?.click()} className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-indigo-400 h-32 flex flex-col items-center justify-center mb-3">
+                  <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                  <p className="text-xs text-gray-500">Upload foto</p>
+                  <input ref={(el) => { if (el) fileInputRefs.current[char.id] = el; }} type="file" accept="image/*" onChange={(e) => handleCharacterImageSelect(char.id, e)} className="hidden" />
                 </div>
               ) : (
-                <div className="relative">
-                  <img
-                    src={imagePreview}
-                    alt="Preview"
-                    className="w-full h-64 object-cover rounded-lg"
-                  />
-                  <button
-                    onClick={removeImage}
-                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-2 transition-colors"
-                  >
-                    <X className="w-4 h-4" />
+                <div className="relative h-32 mb-3">
+                  <img src={char.preview} alt={char.name} className="w-full h-full object-cover rounded-lg" />
+                  <button onClick={() => { updateCharacter(char.id, 'image', null); updateCharacter(char.id, 'preview', null); }} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1">
+                    <X className="w-3 h-3" />
                   </button>
                 </div>
               )}
+              
+              <input value={char.name} onChange={(e) => updateCharacter(char.id, 'name', e.target.value)} placeholder="Nama karakter..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" />
             </div>
-          )}
+          ))}
+        </div>
+      </div>
 
-          {/* Prompt Input */}
-          <div className="mb-6">
-            <label className="block text-sm font-semibold text-gray-700 mb-3">
-              {activeTab === 'text' ? 'Deskripsi Video:' : 'Deskripsi Animasi (Opsional):'}
-            </label>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={
-                activeTab === 'text'
-                  ? 'Contoh: A serene sunset over a calm ocean, with gentle waves and seagulls flying in the distance'
-                  : 'Contoh: Add smooth camera movement, zoom in slowly'
-              }
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-transparent resize-none"
-              style={{ outline: 'none' }}
-              onFocus={(e) => {
-                e.target.style.boxShadow = '0 0 0 2px #4f46e5';
-              }}
-              onBlur={(e) => {
-                e.target.style.boxShadow = 'none';
-              }}
-              rows={4}
-              maxLength={maxChars}
-            />
-            <div className="flex justify-end mt-2">
-              <span className={`text-sm ${charCount > maxChars * 0.9 ? 'text-red-600' : 'text-gray-500'}`}>
-                {charCount}/{maxChars} karakter
-              </span>
-            </div>
+      {/* Story Settings */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">2. Judul Cerita <span className="text-red-500">*</span></label>
+            <input value={storyTitle} onChange={(e) => setStoryTitle(e.target.value)} placeholder="Contoh: Petualangan di Hutan Ajaib..." className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
           </div>
-
-          {/* Style Selection */}
-          <div className="mb-6">
-            <label className="block text-sm font-semibold text-gray-700 mb-3">
-              Style Video:
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {VIDEO_STYLES.map((style) => (
-                <button
-                  key={style}
-                  onClick={() => setSelectedStyle(style)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    selectedStyle === style
-                      ? 'text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                  style={selectedStyle === style ? { backgroundColor: '#4f46e5' } : {}}
-                >
-                  {style}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">3. Aspect Ratio</label>
+            <div className="flex gap-2">
+              {ASPECT_RATIOS.map((ratio) => (
+                <button key={ratio.value} onClick={() => setSelectedRatio(ratio.value)} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${selectedRatio === ratio.value ? 'text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`} style={selectedRatio === ratio.value ? { backgroundColor: '#4f46e5' } : {}}>
+                  {ratio.label}
                 </button>
               ))}
             </div>
           </div>
-
-          {/* Aspect Ratio & Duration */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Aspect Ratio:
-              </label>
-              <select
-                value={selectedRatio}
-                onChange={(e) => setSelectedRatio(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-transparent"
-                style={{ outline: 'none' }}
-                onFocus={(e) => {
-                  e.target.style.boxShadow = '0 0 0 2px #4f46e5';
-                }}
-                onBlur={(e) => {
-                  e.target.style.boxShadow = 'none';
-                }}
-              >
-                {ASPECT_RATIOS.map((ratio) => (
-                  <option key={ratio.value} value={ratio.value}>
-                    {ratio.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Durasi:
-              </label>
-              <select
-                value={selectedDuration}
-                onChange={(e) => setSelectedDuration(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-transparent"
-                style={{ outline: 'none' }}
-                onFocus={(e) => {
-                  e.target.style.boxShadow = '0 0 0 2px #4f46e5';
-                }}
-                onBlur={(e) => {
-                  e.target.style.boxShadow = 'none';
-                }}
-              >
-                {DURATIONS.map((duration) => (
-                  <option key={duration.value} value={duration.value}>
-                    {duration.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Generate Button */}
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating || (activeTab === 'text' && !prompt.trim()) || (activeTab === 'image' && !imageFile)}
-            className="w-full disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-            style={{ backgroundColor: isGenerating || (activeTab === 'text' && !prompt.trim()) || (activeTab === 'image' && !imageFile) ? undefined : '#4f46e5' }}
-            onMouseEnter={(e) => {
-              if (!isGenerating && ((activeTab === 'text' && prompt.trim()) || (activeTab === 'image' && imageFile))) {
-                e.currentTarget.style.backgroundColor = '#4338ca';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isGenerating && ((activeTab === 'text' && prompt.trim()) || (activeTab === 'image' && imageFile))) {
-                e.currentTarget.style.backgroundColor = '#4f46e5';
-              }
-            }}
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Membuat Video... {progress}%
-              </>
-            ) : (
-              <>
-                <Film className="w-5 h-5" />
-                Generate Video
-              </>
-            )}
-          </button>
-
-          {/* Progress Bar */}
-          {isGenerating && (
-            <div className="mt-4">
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${progress}%`, backgroundColor: '#4f46e5' }}
-                />
-              </div>
-              <p className="text-sm text-gray-600 text-center mt-2">
-                Proses ini memakan waktu 1-2 menit, mohon bersabar...
-              </p>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Video Player */}
-      {videoUrl && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+      {/* Generate Story Button */}
+      <button onClick={generateStory} disabled={isGeneratingStory || !storyTitle.trim() || !characters.some(c => c.name.trim() && c.image)} className="w-full disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-lg transition-colors flex items-center justify-center gap-2 mb-6" style={{ backgroundColor: isGeneratingStory || !storyTitle.trim() || !characters.some(c => c.name.trim() && c.image) ? undefined : '#4f46e5' }}>
+        {isGeneratingStory ? (<><Loader2 className="w-5 h-5 animate-spin" />Generating Story...</>) : (<><Sparkles className="w-5 h-5" />Generate Story Scenes</>)}
+      </button>
+
+      {/* Generated Scenes */}
+      {scenes.length > 0 && (
+        <div className="space-y-4 mb-6">
+          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
             <Film className="w-5 h-5" style={{ color: '#4f46e5' }} />
-            Hasil Video
+            Story Scenes ({scenes.length})
           </h3>
           
-          <div className="rounded-lg p-6" style={{ background: 'linear-gradient(to right, #eef2ff, #fce7f3)' }}>
-            <div className="bg-black rounded-lg overflow-hidden mb-4">
-              <video
-                ref={videoRef}
-                src={videoUrl}
-                onEnded={() => setIsPlaying(false)}
-                className="w-full"
-                controls
-              />
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <button
-                onClick={togglePlayPause}
-                className="w-12 h-12 rounded-full flex items-center justify-center text-white transition-colors"
-                style={{ backgroundColor: '#4f46e5' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#4338ca';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#4f46e5';
-                }}
-              >
-                {isPlaying ? (
-                  <Pause className="w-5 h-5" />
-                ) : (
-                  <Play className="w-5 h-5 ml-1" />
-                )}
-              </button>
-              
-              <div className="flex-1">
-                <div className="text-sm font-medium text-gray-900 mb-1">
-                  Video {activeTab === 'text' ? 'Text-to-Video' : 'Image-to-Video'}
+          {scenes.map((scene) => (
+            <div key={scene.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <span className="px-3 py-1 rounded-lg text-sm font-semibold text-white" style={{ backgroundColor: '#4f46e5' }}>
+                  SCENE {scene.sceneNumber}
+                </span>
+                <button onClick={() => removeScene(scene.id)} className="text-red-500 hover:text-red-600">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Image Section */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Scene Image</label>
+                  {scene.imageUrl ? (
+                    <img src={scene.imageUrl} alt={`Scene ${scene.sceneNumber}`} className="w-full h-48 object-cover rounded-lg mb-3" />
+                  ) : (
+                    <div className="w-full h-48 bg-gray-100 rounded-lg flex items-center justify-center mb-3">
+                      {scene.isGeneratingImage ? (
+                        <div className="text-center">
+                          <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto mb-2" />
+                          <p className="text-sm text-gray-500">Generating image...</p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-400">No image yet</p>
+                      )}
+                    </div>
+                  )}
+                  <button onClick={() => generateSceneImage(scene.id)} disabled={scene.isGeneratingImage} className="w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-100 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+                    {scene.isGeneratingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    {scene.imageUrl ? 'Regenerate Image' : 'Generate Image'} (4 credits)
+                  </button>
                 </div>
-                <div className="text-xs text-gray-500">
-                  {selectedRatio} • {selectedStyle} • {selectedDuration}s
+
+                {/* Prompt & Video Section */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Scene Prompt</label>
+                  <textarea value={scene.prompt} onChange={(e) => updateScenePrompt(scene.id, e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none mb-3" rows={4} />
+                  
+                  {scene.videoUrl ? (
+                    <div className="border border-gray-200 rounded-lg p-3">
+                      <video src={scene.videoUrl} controls className="w-full rounded-lg mb-2" />
+                      <button onClick={() => downloadVideo(scene.videoUrl!, `scene-${scene.sceneNumber}`)} className="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+                        <Download className="w-4 h-4" />Download Video
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => generateSceneVideo(scene.id)} disabled={scene.isGeneratingVideo} className="w-full disabled:bg-gray-300 text-white font-medium py-3 rounded-lg flex items-center justify-center gap-2" style={{ backgroundColor: scene.isGeneratingVideo ? undefined : '#4f46e5' }}>
+                      {scene.isGeneratingVideo ? (<><Loader2 className="w-4 h-4 animate-spin" />Generating Video...</>) : (<><Play className="w-4 h-4" />Generate Video (10 credits)</>)}
+                    </button>
+                  )}
                 </div>
               </div>
-              
-              <button
-                onClick={handleDownload}
-                className="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg flex items-center gap-2 text-sm font-medium text-gray-700 transition-colors"
-              >
-                <Download className="w-4 h-4" />
-                Download
-              </button>
             </div>
-          </div>
+          ))}
+
+          {/* Add Scene Button */}
+          <button onClick={addScene} className="w-full px-6 py-4 bg-white border-2 border-dashed border-gray-300 hover:border-indigo-400 rounded-lg flex items-center justify-center gap-2 font-medium text-gray-600 hover:text-indigo-600 transition-colors">
+            <Plus className="w-5 h-5" />Tambah Scene
+          </button>
         </div>
       )}
 
       {/* Credits Info */}
-      {/* <div className="mt-6 text-center text-sm text-gray-500">
+      <div className="mt-6 text-center text-sm text-gray-500">
         Credits tersisa: <span className="font-semibold" style={{ color: '#4f46e5' }}>{user?.credits || 0}</span>
-      </div> */}
+        <span className="mx-2">•</span>
+        <span>Image: 4 credits | Video: 10 credits</span>
+      </div>
     </div>
   );
 }

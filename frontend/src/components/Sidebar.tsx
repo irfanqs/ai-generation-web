@@ -10,11 +10,9 @@ import {
   User,
   Film,
   Utensils,
-  TestTube,
   ChevronLeft,
   ChevronRight,
-  History,
-  Play
+  History
 } from 'lucide-react';
 
 const menuItems = [
@@ -22,14 +20,12 @@ const menuItems = [
     title: 'MAIN TOOLS',
     items: [
       { icon: Mic, label: 'Text To Voice', subtitle: 'Gemini TTS', href: '/dashboard/tts' },
-      { icon: Video, label: 'Video Scene Creator', subtitle: 'Gemini Veo', href: '/dashboard/text-to-video' },
+      { icon: Video, label: 'Video Scene Creator', subtitle: '4 Scene Otomatis', href: '/dashboard/veo-prompter' },
+      { icon: Film, label: 'Veo 3 Story Prompter', subtitle: 'Story dengan Karakter', href: '/dashboard/text-to-video' },
       { icon: Wand2, label: 'Product With Model', subtitle: 'Virtual Photography', href: '/dashboard/image-to-image' },
-      { icon: Video, label: 'Veo 3 Prompter', subtitle: 'Video Prompting', href: '/dashboard/veo-prompter' },
       { icon: User, label: 'Create Karakter', subtitle: 'Character Design', href: '/dashboard/character' },
       { icon: Utensils, label: 'Food & Drink', subtitle: 'Culinary AI', href: '/dashboard/food' },
-      { icon: Film, label: 'Affiliate Content', subtitle: 'Monetization Creator', href: '/dashboard/affiliate' },
       { icon: Sparkles, label: 'Create Animasi', subtitle: 'Juicy Anime', href: '/dashboard/animation' },
-      { icon: TestTube, label: 'Google Labs', subtitle: 'New Features', href: '/dashboard/labs' },
     ]
   },
   {
