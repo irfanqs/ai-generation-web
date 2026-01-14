@@ -29,6 +29,12 @@ const menuItems = [
     ]
   },
   {
+    title: 'AFFILIATE',
+    items: [
+      { icon: Film, label: 'Affiliate Content', subtitle: '4 Collection Generator', href: '/dashboard/affiliate' },
+    ]
+  },
+  {
     title: 'MY CONTENT',
     items: [
       { icon: History, label: 'Generation History', subtitle: 'View all results', href: '/dashboard/history' },
