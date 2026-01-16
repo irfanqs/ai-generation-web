@@ -12,6 +12,9 @@ import { BatchController } from './batch.controller';
 import { BatchProcessor } from './batch.processor';
 import { VeoService } from './veo.service';
 import { VeoController } from './veo.controller';
+import { AnimationService } from './animation.service';
+import { AnimationController } from './animation.controller';
+import { AffiliateController } from './affiliate.controller';
 
 @Module({
   imports: [
@@ -23,7 +26,7 @@ import { VeoController } from './veo.controller';
     }),
     PrismaModule,
   ],
-  controllers: [GenerationController, BatchController, VeoController],
+  controllers: [GenerationController, BatchController, VeoController, AnimationController, AffiliateController],
   providers: [
     GenerationService,
     GeminiService,
@@ -33,6 +36,7 @@ import { VeoController } from './veo.controller';
     BatchService,
     BatchProcessor,
     VeoService,
+    AnimationService,
   ],
 })
 export class GenerationModule {}

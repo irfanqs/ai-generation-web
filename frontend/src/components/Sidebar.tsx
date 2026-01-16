@@ -130,28 +130,23 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
         ))}
       </div>
 
-      {/* Toggle Button - Desktop */}
-      <button
-        onClick={onToggle}
-        className="absolute -right-3 top-32 bg-white border border-gray-300 rounded-full p-1.5 shadow-lg hover:bg-gray-50 transition-colors z-[60] hidden lg:block"
-      >
-        {isOpen ? (
-          <ChevronLeft className="w-4 h-4 text-gray-600" />
-        ) : (
-          <ChevronRight className="w-4 h-4 text-gray-600" />
-        )}
-      </button>
     </div>
 
-    {/* Toggle Button - When Closed (Desktop) */}
-    {!isOpen && (
-      <button
-        onClick={onToggle}
-        className="fixed left-4 top-32 bg-white border border-gray-300 rounded-full p-2 shadow-lg hover:bg-gray-50 transition-colors z-[60] hidden lg:block"
-      >
-        <ChevronRight className="w-5 h-5 text-gray-600" />
-      </button>
-    )}
+    {/* Toggle Button - Desktop Only */}
+    <button
+      onClick={onToggle}
+      className={`
+        fixed top-32 bg-white border border-gray-300 rounded-full p-2 shadow-lg 
+        hover:bg-gray-50 transition-all duration-300 z-[60] hidden lg:flex items-center justify-center
+        ${isOpen ? 'left-[252px]' : 'left-4'}
+      `}
+    >
+      {isOpen ? (
+        <ChevronLeft className="w-4 h-4 text-gray-600" />
+      ) : (
+        <ChevronRight className="w-4 h-4 text-gray-600" />
+      )}
+    </button>
     </>
   );
 }

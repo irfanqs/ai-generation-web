@@ -46,6 +46,39 @@ export class VeoService {
   }
 
   /**
+   * Helper to clean base64 and detect mime type
+   */
+  private parseBase64Image(imageBase64: string): { data: string; mimeType: string } {
+    // Handle undefined or null
+    if (!imageBase64) {
+      throw new Error('Image base64 data is required');
+    }
+    
+    let cleanBase64 = imageBase64;
+    let mimeType = 'image/jpeg';
+    
+    if (typeof imageBase64 === 'string' && imageBase64.includes(',')) {
+      // Has data URI prefix
+      const parts = imageBase64.split(',');
+      cleanBase64 = parts[1];
+      
+      // Extract mime type from prefix
+      const mimeMatch = parts[0].match(/data:([^;]+)/);
+      if (mimeMatch) {
+        mimeType = mimeMatch[1];
+      }
+    } else if (typeof imageBase64 === 'string') {
+      if (imageBase64.startsWith('/9j/')) {
+        mimeType = 'image/jpeg';
+      } else if (imageBase64.startsWith('iVBOR')) {
+        mimeType = 'image/png';
+      }
+    }
+    
+    return { data: cleanBase64, mimeType };
+  }
+
+  /**
    * Generate video from text prompt
    */
   async textToVideo(
@@ -97,14 +130,25 @@ export class VeoService {
   ): Promise<{ videoBase64: string; operationName: string }> {
     console.log('🎬 [VeoService] Image-to-Video generation...');
     console.log('📝 [VeoService] Prompt:', prompt);
+    console.log('🖼️ [VeoService] imageBase64 type:', typeof imageBase64);
+    console.log('🖼️ [VeoService] imageBase64 exists:', !!imageBase64);
+    console.log('🖼️ [VeoService] imageBase64 length:', imageBase64?.length || 0);
+
+    if (!imageBase64) {
+      throw new Error('imageBase64 is required for image-to-video generation');
+    }
 
     try {
+      const { data: cleanBase64, mimeType } = this.parseBase64Image(imageBase64);
+      console.log('🖼️ [VeoService] Image mime type:', mimeType);
+      console.log('🖼️ [VeoService] Clean base64 length:', cleanBase64.length);
+
       let operation = await this.ai.models.generateVideos({
         model,
         prompt,
         image: {
-          imageBytes: imageBase64,
-          mimeType: 'image/jpeg',
+          imageBytes: cleanBase64,
+          mimeType: mimeType,
         },
         config: {
           aspectRatio: config?.aspectRatio || '16:9',
@@ -145,15 +189,18 @@ export class VeoService {
     }
 
     try {
-      const references = referenceImages.map((ref) => ({
-        image: {
-          imageBytes: ref.imageBase64,
-          mimeType: 'image/jpeg',
-        },
-        referenceType: ref.referenceType === 'asset' 
-          ? VideoGenerationReferenceType.ASSET 
-          : VideoGenerationReferenceType.STYLE,
-      }));
+      const references = referenceImages.map((ref) => {
+        const { data, mimeType } = this.parseBase64Image(ref.imageBase64);
+        return {
+          image: {
+            imageBytes: data,
+            mimeType: mimeType,
+          },
+          referenceType: ref.referenceType === 'asset' 
+            ? VideoGenerationReferenceType.ASSET 
+            : VideoGenerationReferenceType.STYLE,
+        };
+      });
 
       let operation = await this.ai.models.generateVideos({
         model: VeoService.MODELS.VEO_3_1,
@@ -191,19 +238,22 @@ export class VeoService {
     console.log('🎬 [VeoService] Interpolation video generation...');
 
     try {
+      const firstFrame = this.parseBase64Image(interpolation.firstFrameBase64);
+      const lastFrame = this.parseBase64Image(interpolation.lastFrameBase64);
+      
       let operation = await this.ai.models.generateVideos({
         model: VeoService.MODELS.VEO_3_1,
         prompt: interpolation.prompt || 'Smooth transition between frames',
         image: {
-          imageBytes: interpolation.firstFrameBase64,
-          mimeType: 'image/jpeg',
+          imageBytes: firstFrame.data,
+          mimeType: firstFrame.mimeType,
         },
         config: {
           aspectRatio: config?.aspectRatio || '16:9',
           negativePrompt: config?.negativePrompt,
           lastFrame: {
-            imageBytes: interpolation.lastFrameBase64,
-            mimeType: 'image/jpeg',
+            imageBytes: lastFrame.data,
+            mimeType: lastFrame.mimeType,
           },
           durationSeconds: 8, // Required for interpolation
         },

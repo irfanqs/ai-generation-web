@@ -33,6 +33,13 @@ const COLLECTIONS = [
   { id: 'ugc', name: 'UGC', subtitle: 'COLLECTION', icon: Users, description: 'User-generated content style' },
 ];
 
+const IMAGE_COUNT_OPTIONS = [
+  { value: 1, label: '1 foto' },
+  { value: 2, label: '2 foto' },
+  { value: 3, label: '3 foto' },
+  { value: 4, label: '4 foto' },
+];
+
 interface GeneratedImage {
   id: string;
   collectionId: string;
@@ -58,6 +65,7 @@ export default function AffiliateContentPage() {
   const [language, setLanguage] = useState('id');
   const [storeName, setStoreName] = useState('');
   const [accent, setAccent] = useState('');
+  const [imagesPerCollection, setImagesPerCollection] = useState(2);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   
@@ -92,7 +100,8 @@ export default function AffiliateContentPage() {
     if (!productImage) { toast.error('Upload foto produk terlebih dahulu'); return; }
     if (!description.trim()) { toast.error('Masukkan deskripsi produk'); return; }
 
-    const totalCost = 16 * 4; // 16 images x 4 credits
+    const totalImages = COLLECTIONS.length * imagesPerCollection;
+    const totalCost = totalImages * 4; // images x 4 credits each
     if ((user?.credits || 0) < totalCost) {
       toast.error(`Credits tidak cukup! Butuh ${totalCost} credits`);
       return;
@@ -101,7 +110,7 @@ export default function AffiliateContentPage() {
     setIsGenerating(true);
     const initialImages: GeneratedImage[] = [];
     COLLECTIONS.forEach(col => {
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < imagesPerCollection; i++) {
         initialImages.push({
           id: `${col.id}-${i}`,
           collectionId: col.id,
@@ -116,43 +125,49 @@ export default function AffiliateContentPage() {
     setGeneratedImages(initialImages);
 
     try {
+      // Step 1: Upload reference images to Cloudinary first
+      toast.loading('Uploading reference images...', { id: 'upload' });
+      
       const productBase64 = await fileToBase64(productImage);
       const modelBase64 = modelImage ? await fileToBase64(modelImage) : null;
 
+      const uploadResponse = await axios.post('/affiliate/upload-references', {
+        productImageBase64: productBase64,
+        modelImageBase64: modelBase64,
+      });
+
+      if (!uploadResponse.data.success) {
+        throw new Error('Failed to upload reference images');
+      }
+
+      const { productImageUrl, modelImageUrl } = uploadResponse.data;
+      toast.success('Reference images uploaded!', { id: 'upload' });
+
+      // Step 2: Generate images using URLs (parallel)
       for (const collection of COLLECTIONS) {
         const prompts = getCollectionPrompts(collection.id);
         
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < imagesPerCollection; i++) {
           const imageId = `${collection.id}-${i}`;
           try {
-            const response = await axios.post('/generation/text-to-image', {
+            // Use new affiliate endpoint with image URLs
+            const response = await axios.post('/affiliate/generate-image', {
               prompt: prompts[i],
-              productReference: productBase64,
-              modelReference: modelBase64,
+              productImageUrl,
+              modelImageUrl,
             });
 
-            if (response.data.id) {
-              let attempts = 0;
-              const maxAttempts = 30;
-              const pollInterval = setInterval(async () => {
-                attempts++;
-                try {
-                  const statusRes = await axios.get(`/generation/${response.data.id}`);
-                  if (statusRes.data.status === 'completed') {
-                    clearInterval(pollInterval);
-                    setGeneratedImages(prev => prev.map(img => 
-                      img.id === imageId ? { ...img, imageUrl: statusRes.data.outputUrl, isGenerating: false } : img
-                    ));
-                  } else if (statusRes.data.status === 'failed' || attempts >= maxAttempts) {
-                    clearInterval(pollInterval);
-                    setGeneratedImages(prev => prev.map(img => 
-                      img.id === imageId ? { ...img, isGenerating: false } : img
-                    ));
-                  }
-                } catch (e) { console.error('Polling error:', e); }
-              }, 2000);
+            if (response.data.success) {
+              setGeneratedImages(prev => prev.map(img => 
+                img.id === imageId ? { ...img, imageUrl: response.data.imageUrl, isGenerating: false } : img
+              ));
+            } else {
+              setGeneratedImages(prev => prev.map(img => 
+                img.id === imageId ? { ...img, isGenerating: false } : img
+              ));
             }
           } catch (error: any) {
+            console.error('Generate error:', error);
             setGeneratedImages(prev => prev.map(img => 
               img.id === imageId ? { ...img, isGenerating: false } : img
             ));
@@ -216,7 +231,16 @@ export default function AffiliateContentPage() {
 
   const generateVideoPrompt = async (imageId: string) => {
     const image = generatedImages.find(img => img.id === imageId);
-    if (!image || !image.imageUrl) return;
+    
+    console.log('generateVideoPrompt called');
+    console.log('imageId:', imageId);
+    console.log('image found:', !!image);
+    console.log('image.imageUrl:', image?.imageUrl);
+    
+    if (!image || !image.imageUrl) {
+      toast.error('Image URL tidak tersedia');
+      return;
+    }
 
     if ((user?.credits || 0) < 10) {
       toast.error('Credits tidak cukup! Butuh 10 credits');
@@ -227,17 +251,17 @@ export default function AffiliateContentPage() {
     const toastId = toast.loading('Generating video...');
 
     try {
-      const imgResponse = await fetch(image.imageUrl);
-      const blob = await imgResponse.blob();
-      const imageBase64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-        reader.readAsDataURL(blob);
-      });
-
       const stylePrompt = getVideoStylePrompt(image.videoStyle);
+      
+      console.log('Sending to backend:', {
+        imageUrl: image.imageUrl,
+        prompt: stylePrompt,
+        aspectRatio,
+      });
+      
+      // Send URL directly to backend (backend will download the image)
       const response = await axios.post('/veo/image-to-video', {
-        imageBase64,
+        imageUrl: image.imageUrl,
         prompt: stylePrompt,
         aspectRatio,
       });
@@ -250,8 +274,9 @@ export default function AffiliateContentPage() {
         updateCredits(userRes.data.credits);
       }
     } catch (error: any) {
+      console.error('Generate video error:', error);
       setGeneratedImages(prev => prev.map(img => img.id === imageId ? { ...img, isGeneratingVideo: false } : img));
-      toast.error('Gagal generate video', { id: toastId });
+      toast.error(error.response?.data?.message || 'Gagal generate video', { id: toastId });
     }
   };
 
@@ -384,6 +409,12 @@ export default function AffiliateContentPage() {
                 </select>
               </div>
               <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">FOTO PER KOLEKSI</label>
+                <select value={imagesPerCollection} onChange={(e) => setImagesPerCollection(Number(e.target.value))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                  {IMAGE_COUNT_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+              </div>
+              <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">BAHASA</label>
                 <select value={language} onChange={(e) => setLanguage(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
                   {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
@@ -393,8 +424,8 @@ export default function AffiliateContentPage() {
                 <label className="block text-xs font-medium text-gray-500 mb-1">NAMA TOKO (SIGNAGE)</label>
                 <input value={storeName} onChange={(e) => setStoreName(e.target.value)} placeholder="Contoh: Toko Berkah" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">AKSEN (JAWA/JAKSEL)</label>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-500 mb-1">AKSEN</label>
                 <input value={accent} onChange={(e) => setAccent(e.target.value)} placeholder="Opsional" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
               </div>
             </div>
@@ -404,7 +435,7 @@ export default function AffiliateContentPage() {
           <button onClick={generateContent} disabled={isGenerating || !productImage || !description.trim()} className="w-full disabled:bg-gray-300 text-white font-semibold py-4 rounded-lg flex items-center justify-center gap-2" style={{ backgroundColor: isGenerating || !productImage || !description.trim() ? undefined : '#4f46e5' }}>
             {isGenerating ? (<><Loader2 className="w-5 h-5 animate-spin" />GENERATING...</>) : 'GENERATE KONTEN SEKARANG'}
           </button>
-          <p className="text-xs text-center text-gray-500">16 gambar × 4 credits = 64 credits total</p>
+          <p className="text-xs text-center text-gray-500">{COLLECTIONS.length * imagesPerCollection} gambar × 4 credits = {COLLECTIONS.length * imagesPerCollection * 4} credits total</p>
         </div>
 
         {/* Right Panel - Results */}

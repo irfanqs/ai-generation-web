@@ -13,45 +13,99 @@ import { NonAdminGuard } from './non-admin.guard';
 import { VeoService, VeoConfig, ReferenceImage, InterpolationConfig } from './veo.service';
 import { GenerationService } from './generation.service';
 import { calculateCreditCost } from './credit-costs.config';
+import { IsOptional, IsString } from 'class-validator';
 
 // DTOs
 class TextToVideoDto {
+  @IsString()
   prompt: string;
+
+  @IsOptional()
+  @IsString()
   aspectRatio?: '16:9' | '9:16';
+
+  @IsOptional()
+  @IsString()
   negativePrompt?: string;
+
+  @IsOptional()
+  @IsString()
   model?: string;
 }
 
 class ImageToVideoDto {
-  imageBase64: string;
+  @IsOptional()
+  @IsString()
+  imageBase64?: string;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @IsOptional()
+  @IsString()
   prompt?: string;
+
+  @IsOptional()
+  @IsString()
   aspectRatio?: '16:9' | '9:16';
+
+  @IsOptional()
+  @IsString()
   negativePrompt?: string;
 }
 
 class VideoWithReferencesDto {
+  @IsString()
   prompt: string;
+
   referenceImages: ReferenceImage[];
+
+  @IsOptional()
+  @IsString()
   aspectRatio?: '16:9' | '9:16';
+
+  @IsOptional()
+  @IsString()
   negativePrompt?: string;
 }
 
 class InterpolateVideoDto {
+  @IsString()
   firstFrameBase64: string;
+
+  @IsString()
   lastFrameBase64: string;
+
+  @IsOptional()
+  @IsString()
   prompt?: string;
+
+  @IsOptional()
+  @IsString()
   aspectRatio?: '16:9' | '9:16';
 }
 
 class ExtendVideoDto {
+  @IsString()
   videoBase64: string;
+
+  @IsOptional()
+  @IsString()
   prompt?: string;
 }
 
 class LongVideoDto {
+  @IsString()
   initialPrompt: string;
+
   segments: { prompt: string }[];
+
+  @IsOptional()
   referenceImages?: ReferenceImage[];
+
+  @IsOptional()
+  @IsString()
   aspectRatio?: '16:9' | '9:16';
 }
 
@@ -122,19 +176,41 @@ export class VeoController {
     const userId = req.user.id;
     const creditCost = calculateCreditCost('image-to-video');
 
+    console.log('🎬 [VeoController] image-to-video request');
+    console.log('🎬 [VeoController] Full DTO received:', JSON.stringify(dto, null, 2));
+    console.log('🖼️ [VeoController] imageBase64 exists:', !!dto.imageBase64);
+    console.log('🖼️ [VeoController] imageUrl exists:', !!dto.imageUrl);
+    console.log('🖼️ [VeoController] imageUrl value:', dto.imageUrl);
+
+    // Need either imageBase64 or imageUrl
+    if (!dto.imageBase64 && !dto.imageUrl) {
+      throw new HttpException('imageBase64 or imageUrl is required', HttpStatus.BAD_REQUEST);
+    }
+
     const hasCredits = await this.generationService.checkAndDeductCredits(userId, creditCost);
     if (!hasCredits) {
       throw new HttpException('Insufficient credits', HttpStatus.PAYMENT_REQUIRED);
     }
 
     try {
+      let imageBase64 = dto.imageBase64;
+      
+      // If URL provided, download and convert to base64
+      if (!imageBase64 && dto.imageUrl) {
+        console.log('📥 [VeoController] Downloading image from URL:', dto.imageUrl);
+        const axios = require('axios');
+        const response = await axios.get(dto.imageUrl, { responseType: 'arraybuffer' });
+        imageBase64 = Buffer.from(response.data).toString('base64');
+        console.log('✅ [VeoController] Image downloaded, base64 length:', imageBase64.length);
+      }
+
       const config: VeoConfig = {
         aspectRatio: dto.aspectRatio || '16:9',
         negativePrompt: dto.negativePrompt,
       };
 
       const result = await this.veoService.imageToVideo(
-        dto.imageBase64,
+        imageBase64,
         dto.prompt || 'Animate this image with smooth motion',
         config,
       );

@@ -220,21 +220,18 @@ export default function Veo3PrompterPage() {
     try {
       const characterWithImage = characters.find(c => c.image);
       let imageBase64 = '';
+      let imageUrl = '';
+      
       if (scene.imageUrl) {
-        // Download scene image and convert to base64
-        const imgResponse = await fetch(scene.imageUrl);
-        const blob = await imgResponse.blob();
-        imageBase64 = await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-          reader.readAsDataURL(blob);
-        });
+        // Use URL directly - backend will download
+        imageUrl = scene.imageUrl;
       } else if (characterWithImage?.image) {
         imageBase64 = await fileToBase64(characterWithImage.image);
       }
 
       const response = await axios.post('/veo/image-to-video', {
         imageBase64: imageBase64 || undefined,
+        imageUrl: imageUrl || undefined,
         prompt: scene.prompt,
         aspectRatio: selectedRatio,
       });
