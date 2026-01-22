@@ -334,9 +334,40 @@ export class VeoService {
       operation = await ai.operations.getVideosOperation({ operation });
     }
 
-    if (!operation.done) throw new Error(`Video generation timeout`);
-    if (!operation.response?.generatedVideos?.[0]) throw new Error('No video generated');
+    if (!operation.done) {
+      console.error('❌ [VeoService] Operation timed out');
+      throw new Error(`Video generation timeout after ${maxAttempts * 10} seconds`);
+    }
 
+    // Log the full response for debugging
+    console.log('📊 [VeoService] Operation done:', operation.done);
+    console.log('📊 [VeoService] Operation response:', JSON.stringify(operation.response || {}).substring(0, 500));
+    
+    // Check for errors in the operation
+    if (operation.error) {
+      console.error('❌ [VeoService] Operation error:', operation.error);
+      throw new Error(`Video generation failed: ${operation.error.message || JSON.stringify(operation.error)}`);
+    }
+
+    // Check if video was generated
+    if (!operation.response) {
+      console.error('❌ [VeoService] No response in operation');
+      throw new Error('No response from video generation');
+    }
+
+    if (!operation.response.generatedVideos || operation.response.generatedVideos.length === 0) {
+      console.error('❌ [VeoService] No generatedVideos in response');
+      console.error('📊 [VeoService] Full response:', JSON.stringify(operation.response));
+      
+      // Check if there's a reason for failure
+      if (operation.response.raiMediaFilteredCount > 0) {
+        throw new Error('Video was filtered due to content policy. Try a different prompt.');
+      }
+      
+      throw new Error('No video generated - the content may have been filtered or generation failed');
+    }
+
+    console.log('✅ [VeoService] Video generated successfully');
     return operation;
   }
 
