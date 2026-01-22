@@ -2,6 +2,7 @@ import { Controller, Post, Body, UseGuards, Request, HttpException, HttpStatus }
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { NonAdminGuard } from './non-admin.guard';
 import { GeminiService } from './gemini.service';
+import { VeoService } from './veo.service';
 import { CloudinaryService } from './cloudinary.service';
 import { PrismaService } from '../prisma/prisma.service';
 import axios from 'axios';
@@ -17,11 +18,18 @@ interface GenerateAffiliateImageDto {
   modelImageUrl?: string;
 }
 
+interface GenerateAffiliateVideoDto {
+  imageBase64: string;
+  prompt: string;
+  aspectRatio?: '16:9' | '9:16';
+}
+
 @Controller('affiliate')
 @UseGuards(JwtAuthGuard, NonAdminGuard)
 export class AffiliateController {
   constructor(
     private gemini: GeminiService,
+    private veoService: VeoService,
     private cloudinary: CloudinaryService,
     private prisma: PrismaService,
   ) {}
@@ -148,6 +156,77 @@ IMPORTANT INSTRUCTIONS:
     } catch (error: any) {
       console.error('💥 [AffiliateController] Error:', error.message);
       throw new HttpException(error.message || 'Failed to generate image', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  // Step 3: Generate video from image using Veo image-to-video
+  @Post('generate-video')
+  async generateVideo(@Request() req, @Body() dto: GenerateAffiliateVideoDto) {
+    console.log('🎬 [AffiliateController] Generate video request');
+    console.log('📝 [AffiliateController] Prompt:', dto.prompt?.substring(0, 100));
+
+    if (!dto.imageBase64) {
+      throw new HttpException('Image is required', HttpStatus.BAD_REQUEST);
+    }
+
+    // Get user's API key
+    const apiKey = await this.getUserApiKey(req.user.id);
+
+    // Check credits (10 credits per video)
+    const user = await this.prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user || user.credits < 10) {
+      throw new HttpException('Insufficient credits. Need 10 credits.', HttpStatus.PAYMENT_REQUIRED);
+    }
+
+    try {
+      // Deduct credits first
+      await this.prisma.user.update({
+        where: { id: req.user.id },
+        data: { credits: { decrement: 10 } }
+      });
+
+      // Generate video using VeoService image-to-video
+      const videoPrompt = dto.prompt || 'Animate this product image with smooth, professional motion. Show the product from different angles with elegant camera movement.';
+      
+      const result = await this.veoService.imageToVideo(
+        dto.imageBase64,
+        videoPrompt,
+        apiKey,
+        { aspectRatio: dto.aspectRatio || '9:16' }
+      );
+
+      // Upload video to Cloudinary
+      const videoDataUri = `data:video/mp4;base64,${result.videoBase64}`;
+      const videoUrl = await this.cloudinary.uploadBase64(videoDataUri, 'video');
+
+      // Save to generation history
+      await this.prisma.generation.create({
+        data: {
+          userId: req.user.id,
+          type: 'affiliate-video',
+          prompt: dto.prompt,
+          status: 'completed',
+          outputUrl: videoUrl,
+          metadata: { creditCost: 10, operationName: result.operationName },
+        }
+      });
+
+      console.log('✅ [AffiliateController] Video generated:', videoUrl);
+
+      return {
+        success: true,
+        videoUrl,
+        videoBase64: result.videoBase64,
+      };
+    } catch (error: any) {
+      // Refund credits on failure
+      await this.prisma.user.update({
+        where: { id: req.user.id },
+        data: { credits: { increment: 10 } }
+      });
+      
+      console.error('💥 [AffiliateController] Video error:', error.message);
+      throw new HttpException(error.message || 'Failed to generate video', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 }
