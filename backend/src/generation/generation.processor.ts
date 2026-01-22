@@ -56,7 +56,7 @@ export class GenerationProcessor {
 
   @Process('process')
   async handleGeneration(job: Job) {
-    const { generationId, type, prompt, inputUrl } = job.data;
+    const { generationId, type, prompt, inputUrl, apiKey } = job.data;
 
     console.log('🚀 [Processor] Starting generation job');
     console.log('📋 [Processor] Job ID:', job.id);
@@ -64,6 +64,11 @@ export class GenerationProcessor {
     console.log('🎯 [Processor] Type:', type);
     console.log('📝 [Processor] Prompt:', prompt);
     console.log('🔗 [Processor] Input URL:', inputUrl);
+    console.log('🔑 [Processor] Has API Key:', !!apiKey);
+
+    if (!apiKey) {
+      throw new Error('Gemini API key is required');
+    }
 
     try {
       await this.prisma.generation.update({
@@ -77,7 +82,7 @@ export class GenerationProcessor {
       switch (type) {
         case 'text-to-image':
           console.log('🎨 [Processor] Processing text-to-image...');
-          const imageBase64 = await this.gemini.generateImage(prompt);
+          const imageBase64 = await this.gemini.generateImage(prompt, apiKey);
           console.log('✅ [Processor] Image generated, uploading to Cloudinary...');
           
           // Add data URI prefix for Cloudinary
@@ -101,6 +106,7 @@ export class GenerationProcessor {
           const editedImageBase64 = await this.gemini.editImage(
             inputImageBase64, 
             prompt,
+            apiKey,
             modelImageBase64, // Pass model reference
           );
           console.log('✅ [Processor] Image edited, uploading to Cloudinary...');
@@ -116,7 +122,7 @@ export class GenerationProcessor {
           
           // For now, just use prompt without image (Veo text-to-video)
           // TODO: Add image input support when available
-          const videoBase64 = await this.gemini.generateVideo(inputUrl, prompt);
+          const videoBase64 = await this.gemini.generateVideo(inputUrl, prompt, apiKey);
           console.log('✅ [Processor] Video generated, uploading to Cloudinary...');
           
           const videoDataUri = `data:video/mp4;base64,${videoBase64}`;
@@ -128,7 +134,7 @@ export class GenerationProcessor {
           console.log('🎤 [Processor] Processing text-to-speech...');
           const voice = job.data.metadata?.voice || 'Kore';
           console.log('🎙️ [Processor] Using voice:', voice);
-          const audioBuffer = await this.gemini.textToSpeech(prompt, voice);
+          const audioBuffer = await this.gemini.textToSpeech(prompt, apiKey, voice);
           console.log('✅ [Processor] Audio generated, size:', audioBuffer.length, 'bytes');
           
           // Convert raw PCM to proper WAV format with header

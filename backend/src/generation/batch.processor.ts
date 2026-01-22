@@ -10,6 +10,7 @@ interface BatchJobData {
   type: string;
   requests: BatchRequest[];
   displayName: string;
+  apiKey: string;
 }
 
 @Processor('batch-generation')
@@ -22,12 +23,17 @@ export class BatchProcessor {
 
   @Process('process-batch')
   async handleBatchJob(job: Job<BatchJobData>) {
-    const { batchGenerationId, userId, type, requests, displayName } = job.data;
+    const { batchGenerationId, userId, type, requests, displayName, apiKey } = job.data;
 
     console.log(`📦 [BatchProcessor] Processing batch job: ${batchGenerationId}`);
     console.log(`👤 [BatchProcessor] User: ${userId}`);
     console.log(`🎯 [BatchProcessor] Type: ${type}`);
     console.log(`📊 [BatchProcessor] Requests: ${requests.length}`);
+    console.log(`🔑 [BatchProcessor] Has API Key: ${!!apiKey}`);
+
+    if (!apiKey) {
+      throw new Error('Gemini API key is required');
+    }
 
     try {
       // Update status to processing
@@ -40,6 +46,7 @@ export class BatchProcessor {
       const { jobName } = await this.batchService.createImageBatchJob(
         requests,
         displayName,
+        apiKey,
       );
 
       console.log(`✅ [BatchProcessor] Batch job created: ${jobName}`);
@@ -59,6 +66,7 @@ export class BatchProcessor {
       // Wait for batch job to complete (poll every 30 seconds, max 2 hours)
       const results = await this.batchService.waitForBatchJob(
         jobName,
+        apiKey,
         30000, // 30 seconds
         7200000, // 2 hours
       );

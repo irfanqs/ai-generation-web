@@ -12,7 +12,8 @@ import {
   Utensils,
   ChevronLeft,
   ChevronRight,
-  History
+  History,
+  Settings
 } from 'lucide-react';
 
 const menuItems = [
@@ -38,6 +39,7 @@ const menuItems = [
     title: 'MY CONTENT',
     items: [
       { icon: History, label: 'Generation History', subtitle: 'View all results', href: '/dashboard/history' },
+      { icon: Settings, label: 'Settings', subtitle: 'API Key & Account', href: '/dashboard/settings' },
     ]
   }
 ];

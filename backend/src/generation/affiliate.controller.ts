@@ -26,6 +26,16 @@ export class AffiliateController {
     private prisma: PrismaService,
   ) {}
 
+  private async getUserApiKey(userId: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (!user?.geminiApiKey) {
+      throw new HttpException('Please set your Gemini API key in Settings first', HttpStatus.BAD_REQUEST);
+    }
+    return user.geminiApiKey;
+  }
+
   // Step 1: Upload reference images to Cloudinary first
   @Post('upload-references')
   async uploadReferences(@Request() req, @Body() dto: UploadReferenceDto) {
@@ -70,6 +80,9 @@ export class AffiliateController {
       throw new HttpException('Prompt and product image URL are required', HttpStatus.BAD_REQUEST);
     }
 
+    // Get user's API key
+    const apiKey = await this.getUserApiKey(req.user.id);
+
     // Check credits (4 credits per image)
     const user = await this.prisma.user.findUnique({ where: { id: req.user.id } });
     if (!user || user.credits < 4) {
@@ -102,7 +115,7 @@ IMPORTANT INSTRUCTIONS:
       }
 
       // Generate image with references
-      const imageBase64 = await this.gemini.editImage(productBase64, fullPrompt, modelBase64);
+      const imageBase64 = await this.gemini.editImage(productBase64, fullPrompt, apiKey, modelBase64);
 
       // Upload to Cloudinary
       const imageDataUri = `data:image/png;base64,${imageBase64}`;

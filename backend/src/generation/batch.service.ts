@@ -30,13 +30,12 @@ export interface BatchResultItem {
 
 @Injectable()
 export class BatchService {
-  private ai: GoogleGenAI;
-  private apiKey: string;
-
   constructor(private prisma: PrismaService) {
-    this.apiKey = process.env.GEMINI_API_KEY;
-    this.ai = new GoogleGenAI({ apiKey: this.apiKey });
-    console.log('✅ [BatchService] Initialized with Gemini API');
+    console.log('✅ [BatchService] Initialized (user API key mode)');
+  }
+
+  private getAI(apiKey: string): GoogleGenAI {
+    return new GoogleGenAI({ apiKey });
   }
 
   /**
@@ -46,11 +45,16 @@ export class BatchService {
   async createImageBatchJob(
     requests: BatchRequest[],
     displayName: string,
+    apiKey: string,
   ): Promise<{ jobName: string; jobId: string }> {
     console.log(`📦 [BatchService] Creating batch job with ${requests.length} requests`);
     console.log(`📝 [BatchService] Display name: ${displayName}`);
 
+    if (!apiKey) throw new Error('Gemini API key is required');
+
     try {
+      const ai = this.getAI(apiKey);
+      
       // Format requests for batch API
       const inlinedRequests = requests.map((req) => ({
         contents: [
@@ -76,7 +80,7 @@ export class BatchService {
       }));
 
       // Create batch job using SDK
-      const batchJob = await this.ai.batches.create({
+      const batchJob = await ai.batches.create({
         model: 'gemini-2.5-flash-preview-image-generation',
         src: inlinedRequests,
         config: {
@@ -102,11 +106,16 @@ export class BatchService {
   async createTextBatchJob(
     requests: BatchRequest[],
     displayName: string,
+    apiKey: string,
     model: string = 'gemini-2.5-flash',
   ): Promise<{ jobName: string; jobId: string }> {
     console.log(`📦 [BatchService] Creating text batch job with ${requests.length} requests`);
 
+    if (!apiKey) throw new Error('Gemini API key is required');
+
     try {
+      const ai = this.getAI(apiKey);
+      
       const inlinedRequests = requests.map((req) => ({
         contents: [
           {
@@ -116,7 +125,7 @@ export class BatchService {
         ],
       }));
 
-      const batchJob = await this.ai.batches.create({
+      const batchJob = await ai.batches.create({
         model: model,
         src: inlinedRequests,
         config: {
@@ -139,7 +148,7 @@ export class BatchService {
   /**
    * Get batch job status
    */
-  async getBatchJobStatus(jobName: string): Promise<{
+  async getBatchJobStatus(jobName: string, apiKey: string): Promise<{
     state: string;
     done: boolean;
     error?: string;
@@ -147,7 +156,8 @@ export class BatchService {
     console.log(`🔍 [BatchService] Checking status for job: ${jobName}`);
 
     try {
-      const batchJob = await this.ai.batches.get({ name: jobName });
+      const ai = this.getAI(apiKey);
+      const batchJob = await ai.batches.get({ name: jobName });
 
       const state = batchJob.state?.toString() || 'UNKNOWN';
       const done = [
@@ -173,11 +183,12 @@ export class BatchService {
   /**
    * Get batch job results
    */
-  async getBatchJobResults(jobName: string): Promise<BatchResultItem[]> {
+  async getBatchJobResults(jobName: string, apiKey: string): Promise<BatchResultItem[]> {
     console.log(`📥 [BatchService] Getting results for job: ${jobName}`);
 
     try {
-      const batchJob = await this.ai.batches.get({ name: jobName });
+      const ai = this.getAI(apiKey);
+      const batchJob = await ai.batches.get({ name: jobName });
 
       if (batchJob.state?.toString() !== 'JOB_STATE_SUCCEEDED') {
         throw new Error(`Job not completed. Current state: ${batchJob.state}`);
@@ -226,7 +237,7 @@ export class BatchService {
         const fs = require('fs');
         const tempPath = `/tmp/batch-results-${Date.now()}.jsonl`;
         
-        await this.ai.files.download({
+        await ai.files.download({
           file: batchJob.dest.fileName,
           downloadPath: tempPath,
         });
@@ -273,11 +284,12 @@ export class BatchService {
   /**
    * Cancel a batch job
    */
-  async cancelBatchJob(jobName: string): Promise<void> {
+  async cancelBatchJob(jobName: string, apiKey: string): Promise<void> {
     console.log(`🛑 [BatchService] Cancelling job: ${jobName}`);
 
     try {
-      await this.ai.batches.cancel({ name: jobName });
+      const ai = this.getAI(apiKey);
+      await ai.batches.cancel({ name: jobName });
       console.log(`✅ [BatchService] Job cancelled`);
     } catch (error: any) {
       console.error('💥 [BatchService] Error cancelling job:', error.message);
@@ -288,11 +300,12 @@ export class BatchService {
   /**
    * Delete a batch job
    */
-  async deleteBatchJob(jobName: string): Promise<void> {
+  async deleteBatchJob(jobName: string, apiKey: string): Promise<void> {
     console.log(`🗑️ [BatchService] Deleting job: ${jobName}`);
 
     try {
-      await this.ai.batches.delete({ name: jobName });
+      const ai = this.getAI(apiKey);
+      await ai.batches.delete({ name: jobName });
       console.log(`✅ [BatchService] Job deleted`);
     } catch (error: any) {
       console.error('💥 [BatchService] Error deleting job:', error.message);
@@ -303,12 +316,13 @@ export class BatchService {
   /**
    * List all batch jobs
    */
-  async listBatchJobs(): Promise<any[]> {
+  async listBatchJobs(apiKey: string): Promise<any[]> {
     console.log(`📋 [BatchService] Listing batch jobs`);
 
     try {
+      const ai = this.getAI(apiKey);
       const jobs: any[] = [];
-      const response = await this.ai.batches.list();
+      const response = await ai.batches.list();
 
       for await (const job of response) {
         jobs.push({
@@ -333,6 +347,7 @@ export class BatchService {
    */
   async waitForBatchJob(
     jobName: string,
+    apiKey: string,
     pollIntervalMs: number = 10000,
     maxWaitMs: number = 3600000, // 1 hour default
   ): Promise<BatchResultItem[]> {
@@ -341,11 +356,11 @@ export class BatchService {
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWaitMs) {
-      const status = await this.getBatchJobStatus(jobName);
+      const status = await this.getBatchJobStatus(jobName, apiKey);
 
       if (status.done) {
         if (status.state === 'JOB_STATE_SUCCEEDED') {
-          return await this.getBatchJobResults(jobName);
+          return await this.getBatchJobResults(jobName, apiKey);
         } else {
           throw new Error(`Batch job failed with state: ${status.state}`);
         }

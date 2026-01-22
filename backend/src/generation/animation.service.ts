@@ -21,35 +21,17 @@ export interface Scene {
   };
 }
 
-interface AnimationProject {
-  id: string;
-  userId: string;
-  characterName: string;
-  storyTitle: string;
-  artStyle: string;
-  aspectRatio: string;
-  characterDNA: CharacterDNA;
-  characterImageUrl: string;
-  scenes: Scene[];
-  status: string;
-  createdAt: Date;
-}
-
 @Injectable()
 export class AnimationService {
-  private apiKey: string;
   private baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
 
   constructor(
     private prisma: PrismaService,
     private gemini: GeminiService,
     private cloudinary: CloudinaryService,
-  ) {
-    this.apiKey = process.env.GEMINI_API_KEY;
-  }
+  ) {}
 
-  // Scan character DNA from image using vision AI
-  async scanCharacterDNA(imageBase64: string): Promise<CharacterDNA> {
+  async scanCharacterDNA(imageBase64: string, apiKey: string): Promise<CharacterDNA> {
     console.log('🔬 [AnimationService] Scanning character DNA...');
     
     const prompt = `Analyze this character image in detail for animation consistency. Provide a comprehensive description in Indonesian language.
@@ -63,40 +45,23 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no code 
 
     try {
       const modelName = 'gemini-2.0-flash';
-      const url = `${this.baseUrl}/models/${modelName}:generateContent?key=${this.apiKey}`;
+      const url = `${this.baseUrl}/models/${modelName}:generateContent?key=${apiKey}`;
       
       const response = await axios.post(url, {
         contents: [{
           parts: [
             { text: prompt },
-            {
-              inlineData: {
-                mimeType: 'image/jpeg',
-                data: imageBase64,
-              }
-            }
+            { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } }
           ]
         }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 2048,
-        }
-      }, {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 30000,
-      });
+        generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
+      }, { headers: { 'Content-Type': 'application/json' }, timeout: 30000 });
 
       const text = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
-      console.log('📝 [AnimationService] Raw DNA response:', text);
-      
-      // Parse JSON from response
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        const dna = JSON.parse(jsonMatch[0]);
-        console.log('✅ [AnimationService] Character DNA parsed successfully');
-        return dna;
+        return JSON.parse(jsonMatch[0]);
       }
-      
       throw new Error('Failed to parse character DNA');
     } catch (error: any) {
       console.error('💥 [AnimationService] Error scanning DNA:', error.message);
@@ -104,17 +69,15 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no code 
     }
   }
 
-  // Generate story scenes from title and character
   async generateStoryScenes(
     storyTitle: string,
     characterName: string,
     characterDNA: CharacterDNA,
     artStyle: string,
+    apiKey: string,
     sceneCount: number = 4
   ): Promise<Scene[]> {
     console.log('📖 [AnimationService] Generating story scenes...');
-    console.log('📝 [AnimationService] Story:', storyTitle);
-    console.log('👤 [AnimationService] Character:', characterName);
     
     const prompt = `You are a professional storyboard writer for animated content. Create ${sceneCount} scenes for this story in Indonesian language.
 
@@ -147,32 +110,18 @@ Make the story flow naturally from scene to scene. Use Indonesian language for a
 
     try {
       const modelName = 'gemini-2.0-flash';
-      const url = `${this.baseUrl}/models/${modelName}:generateContent?key=${this.apiKey}`;
+      const url = `${this.baseUrl}/models/${modelName}:generateContent?key=${apiKey}`;
       
       const response = await axios.post(url, {
-        contents: [{
-          parts: [{ text: prompt }]
-        }],
-        generationConfig: {
-          temperature: 0.8,
-          maxOutputTokens: 4096,
-        }
-      }, {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 60000,
-      });
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.8, maxOutputTokens: 4096 }
+      }, { headers: { 'Content-Type': 'application/json' }, timeout: 60000 });
 
       const text = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
-      console.log('📝 [AnimationService] Raw scenes response:', text?.substring(0, 500));
-      
-      // Parse JSON array from response
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        const scenes = JSON.parse(jsonMatch[0]);
-        console.log('✅ [AnimationService] Generated', scenes.length, 'scenes');
-        return scenes;
+        return JSON.parse(jsonMatch[0]);
       }
-      
       throw new Error('Failed to parse story scenes');
     } catch (error: any) {
       console.error('💥 [AnimationService] Error generating scenes:', error.message);
@@ -180,16 +129,15 @@ Make the story flow naturally from scene to scene. Use Indonesian language for a
     }
   }
 
-  // Generate visual preview for a scene
   async generateScenePreview(
     scene: Scene,
     characterDNA: CharacterDNA,
     characterImageBase64: string,
     artStyle: string,
-    aspectRatio: string
+    aspectRatio: string,
+    apiKey: string
   ): Promise<string> {
     console.log('🎨 [AnimationService] Generating scene preview...');
-    console.log('🎬 [AnimationService] Scene ID:', scene.id);
     
     const aspectMap: Record<string, string> = {
       'landscape': '16:9',
@@ -225,44 +173,26 @@ Generate a high-quality animation frame showing this exact character in this sce
 
     try {
       const modelName = 'gemini-2.5-flash-image';
-      const url = `${this.baseUrl}/models/${modelName}:generateContent?key=${this.apiKey}`;
+      const url = `${this.baseUrl}/models/${modelName}:generateContent?key=${apiKey}`;
       
       const response = await axios.post(url, {
         contents: [{
           parts: [
             { text: prompt },
-            {
-              inlineData: {
-                mimeType: 'image/jpeg',
-                data: characterImageBase64,
-              }
-            }
+            { inlineData: { mimeType: 'image/jpeg', data: characterImageBase64 } }
           ]
         }],
-        generationConfig: {
-          temperature: 1,
-          topK: 40,
-          topP: 0.95,
-        }
-      }, {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 120000,
-      });
+        generationConfig: { temperature: 1, topK: 40, topP: 0.95 }
+      }, { headers: { 'Content-Type': 'application/json' }, timeout: 120000 });
 
       if (response.data.candidates?.[0]?.content?.parts) {
         for (const part of response.data.candidates[0].content.parts) {
           if (part.inlineData?.data) {
-            console.log('✅ [AnimationService] Scene preview generated');
-            
-            // Upload to Cloudinary
             const imageDataUri = `data:image/png;base64,${part.inlineData.data}`;
-            const imageUrl = await this.cloudinary.uploadBase64(imageDataUri, 'image');
-            
-            return imageUrl;
+            return await this.cloudinary.uploadBase64(imageDataUri, 'image');
           }
         }
       }
-      
       throw new Error('No image generated for scene preview');
     } catch (error: any) {
       console.error('💥 [AnimationService] Error generating preview:', error.message);
@@ -270,11 +200,11 @@ Generate a high-quality animation frame showing this exact character in this sce
     }
   }
 
-  // Generate video from scene preview image
   async generateSceneVideo(
     imageUrl: string,
     scene: Scene,
-    artStyle: string
+    artStyle: string,
+    apiKey: string
   ): Promise<string> {
     console.log('🎬 [AnimationService] Generating scene video...');
     
@@ -283,22 +213,17 @@ Style: Smooth ${artStyle} animation.
 Camera: Subtle movement to add life.
 Duration: 4-6 seconds.`;
 
-    // Download image and convert to base64
     const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
     const imageBase64 = Buffer.from(response.data).toString('base64');
     
-    // Use Veo to generate video
-    const videoBase64 = await this.gemini.generateVideo(imageBase64, motionPrompt);
+    const videoBase64 = await this.gemini.generateVideo(imageBase64, motionPrompt, apiKey);
     
-    // Upload to Cloudinary
     const videoDataUri = `data:video/mp4;base64,${videoBase64}`;
     const videoUrl = await this.cloudinary.uploadBase64(videoDataUri, 'video');
     
-    console.log('✅ [AnimationService] Scene video generated:', videoUrl);
     return videoUrl;
   }
 
-  // Deduct credits for animation operations
   async deductCredits(userId: string, amount: number, operation: string): Promise<boolean> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     

@@ -4,29 +4,35 @@ import { GoogleGenAI } from '@google/genai';
 
 @Injectable()
 export class GeminiService {
-  private apiKey: string;
   private baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-  private ai: GoogleGenAI;
 
   constructor() {
-    this.apiKey = process.env.GEMINI_API_KEY;
-    if (!this.apiKey) {
-      console.error('❌ GEMINI_API_KEY not found in environment variables');
-    } else {
-      console.log('✅ Gemini API Key loaded:', this.apiKey.substring(0, 20) + '...');
-    }
-    
-    // Initialize GoogleGenAI for video generation
-    this.ai = new GoogleGenAI({
-      apiKey: this.apiKey,
-    });
+    console.log('✅ GeminiService initialized (user API key mode)');
   }
 
-  async generateImage(prompt: string): Promise<string> {
+  private getAI(apiKey: string): GoogleGenAI {
+    return new GoogleGenAI({ apiKey });
+  }
+
+  async validateApiKey(apiKey: string): Promise<boolean> {
+    try {
+      const url = `${this.baseUrl}/models?key=${apiKey}`;
+      const response = await axios.get(url, { timeout: 10000 });
+      return response.status === 200;
+    } catch (error) {
+      console.error('❌ [GeminiService] API key validation failed:', error.message);
+      return false;
+    }
+  }
+
+  async generateImage(prompt: string, apiKey: string): Promise<string> {
     console.log('🎨 [GeminiService] Starting image generation...');
     console.log('📝 [GeminiService] Prompt:', prompt);
     
-    // Validate prompt
+    if (!apiKey) {
+      throw new Error('Gemini API key is required');
+    }
+    
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
       console.error('❌ [GeminiService] Invalid prompt');
       throw new Error('Prompt is required and must be a non-empty string');
@@ -34,7 +40,7 @@ export class GeminiService {
     
     try {
       const modelName = 'gemini-2.5-flash-image';
-      const url = `${this.baseUrl}/models/${modelName}:generateContent?key=${this.apiKey}`;
+      const url = `${this.baseUrl}/models/${modelName}:generateContent?key=${apiKey}`;
       
       const response = await axios.post(url, {
         contents: [{
@@ -77,19 +83,21 @@ export class GeminiService {
     }
   }
 
-  async editImage(imageBase64: string, prompt: string, modelReferenceBase64?: string): Promise<string> {
+  async editImage(imageBase64: string, prompt: string, apiKey: string, modelReferenceBase64?: string): Promise<string> {
     console.log('✏️  [GeminiService] Starting image editing...');
     console.log('📝 [GeminiService] Prompt:', prompt);
     console.log('👤 [GeminiService] Has model reference:', !!modelReferenceBase64);
     
+    if (!apiKey) {
+      throw new Error('Gemini API key is required');
+    }
+    
     try {
       const modelName = 'gemini-2.5-flash-image';
-      const url = `${this.baseUrl}/models/${modelName}:generateContent?key=${this.apiKey}`;
+      const url = `${this.baseUrl}/models/${modelName}:generateContent?key=${apiKey}`;
       
-      // Build parts array
       const parts: any[] = [{ text: prompt }];
       
-      // Add main product image
       parts.push({
         inlineData: {
           mimeType: 'image/jpeg',
@@ -97,7 +105,6 @@ export class GeminiService {
         }
       });
       
-      // Add model reference image if provided
       if (modelReferenceBase64) {
         parts.push({
           inlineData: {
@@ -137,15 +144,20 @@ export class GeminiService {
     }
   }
 
-  async generateVideo(imageBase64: string, prompt?: string): Promise<string> {
+  async generateVideo(imageBase64: string, prompt: string, apiKey: string): Promise<string> {
     console.log('🎬 [GeminiService] Starting video generation...');
     console.log('📝 [GeminiService] Prompt:', prompt);
     
+    if (!apiKey) {
+      throw new Error('Gemini API key is required');
+    }
+    
     try {
+      const ai = this.getAI(apiKey);
       const videoPrompt = prompt || 'Animate this image with smooth motion';
       
       console.log('📤 [GeminiService] Starting Veo operation...');
-      let operation = await this.ai.models.generateVideos({
+      let operation = await ai.models.generateVideos({
         model: 'veo-3.1-generate-preview',
         prompt: videoPrompt,
       });
@@ -153,7 +165,6 @@ export class GeminiService {
       console.log('✅ [GeminiService] Operation started:', operation.name);
       console.log('⏳ [GeminiService] Polling for completion...');
       
-      // Poll for completion (max 10 minutes)
       let attempts = 0;
       const maxAttempts = 60;
       
@@ -162,7 +173,7 @@ export class GeminiService {
         console.log(`⏳ [GeminiService] Attempt ${attempts}/${maxAttempts}...`);
         await new Promise((resolve) => setTimeout(resolve, 10000));
         
-        operation = await this.ai.operations.getVideosOperation({
+        operation = await ai.operations.getVideosOperation({
           operation: operation,
         });
       }
@@ -177,25 +188,21 @@ export class GeminiService {
         const videoFile = operation.response.generatedVideos[0].video;
         console.log('🎥 [GeminiService] Video file:', videoFile);
         
-        // Use SDK's download method instead of direct axios
         console.log('📥 [GeminiService] Downloading video using SDK...');
         
         try {
-          // Download to temp file first
           const tempPath = `/tmp/video-${Date.now()}.mp4`;
-          await this.ai.files.download({
+          await ai.files.download({
             file: videoFile,
             downloadPath: tempPath,
           });
           
           console.log('✅ [GeminiService] Video downloaded to temp file');
           
-          // Read file and convert to base64
           const fs = require('fs');
           const videoBuffer = fs.readFileSync(tempPath);
           const videoBase64 = videoBuffer.toString('base64');
           
-          // Clean up temp file
           fs.unlinkSync(tempPath);
           
           console.log('✅ [GeminiService] Video converted to base64, length:', videoBase64.length);
@@ -204,7 +211,6 @@ export class GeminiService {
         } catch (downloadError: any) {
           console.error('⚠️ [GeminiService] SDK download failed, trying direct URL...');
           
-          // Fallback: try direct URL with API key in query
           const videoUri = videoFile.uri;
           console.log('🎥 [GeminiService] Video URI:', videoUri);
           
@@ -212,7 +218,7 @@ export class GeminiService {
             responseType: 'arraybuffer',
             timeout: 60000,
             params: {
-              key: this.apiKey,
+              key: apiKey,
             },
           });
           
@@ -234,13 +240,19 @@ export class GeminiService {
     }
   }
 
-  async textToSpeech(text: string, voice: string = 'Kore'): Promise<Buffer> {
+  async textToSpeech(text: string, apiKey: string, voice: string = 'Kore'): Promise<Buffer> {
     console.log('🎤 [GeminiService] Starting text-to-speech...');
     console.log('📝 [GeminiService] Text:', text);
     console.log('🎙️ [GeminiService] Voice:', voice);
     
+    if (!apiKey) {
+      throw new Error('Gemini API key is required');
+    }
+    
     try {
-      const response = await this.ai.models.generateContent({
+      const ai = this.getAI(apiKey);
+      
+      const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-tts',
         contents: [{ parts: [{ text }] }],
         config: {
@@ -254,14 +266,6 @@ export class GeminiService {
       });
       
       console.log('✅ [GeminiService] Speech generated!');
-      console.log('📊 [GeminiService] Response structure:', JSON.stringify({
-        hasCandidates: !!response.candidates,
-        candidatesLength: response.candidates?.length,
-        hasContent: !!response.candidates?.[0]?.content,
-        hasParts: !!response.candidates?.[0]?.content?.parts,
-        partsLength: response.candidates?.[0]?.content?.parts?.length,
-        firstPartKeys: response.candidates?.[0]?.content?.parts?.[0] ? Object.keys(response.candidates[0].content.parts[0]) : []
-      }, null, 2));
       
       const data = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       
@@ -272,7 +276,6 @@ export class GeminiService {
       }
       
       console.error('❌ [GeminiService] No audio data found in response');
-      console.error('Full response:', JSON.stringify(response, null, 2));
       throw new Error('No audio data in response');
     } catch (error: any) {
       console.error('💥 [GeminiService] Error generating speech:', error.message);

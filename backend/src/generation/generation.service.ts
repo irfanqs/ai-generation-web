@@ -27,6 +27,13 @@ export class GenerationService {
     console.log('📎 [GenerationService] Has file:', !!file);
     console.log('📊 [GenerationService] Metadata:', metadata);
     
+    // Get user's API key
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    
+    if (!user.geminiApiKey) {
+      throw new BadRequestException('Please set your Gemini API key in Settings first');
+    }
+    
     // Calculate credit cost based on type and options
     const creditCost = calculateCreditCost(type, {
       duration: metadata?.duration,
@@ -35,8 +42,6 @@ export class GenerationService {
     });
     
     console.log('💰 [GenerationService] Credit cost:', creditCost);
-    
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
     console.log('💰 [GenerationService] User credits:', user.credits);
     
     if (user.credits < creditCost) {
@@ -75,6 +80,7 @@ export class GenerationService {
       prompt,
       inputUrl,
       metadata,
+      apiKey: user.geminiApiKey, // Pass user's API key to processor
     });
     console.log('✅ [GenerationService] Job added to queue');
 

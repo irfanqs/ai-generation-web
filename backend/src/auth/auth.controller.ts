@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Body, Get, Put, UseGuards, Request } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
@@ -20,5 +20,18 @@ export class AuthController {
   @Get('me')
   async getProfile(@Request() req) {
     return req.user;
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Put('api-key')
+  async updateApiKey(@Request() req, @Body() body: { apiKey: string }) {
+    return this.authService.updateGeminiApiKey(req.user.id, body.apiKey);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('api-key')
+  async getApiKeyStatus(@Request() req) {
+    const apiKey = await this.authService.getGeminiApiKey(req.user.id);
+    return { hasApiKey: !!apiKey };
   }
 }

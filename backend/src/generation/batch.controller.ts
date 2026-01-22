@@ -34,6 +34,16 @@ export class BatchController {
     @InjectQueue('batch-generation') private batchQueue: Queue,
   ) {}
 
+  private async getUserApiKey(userId: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (!user?.geminiApiKey) {
+      throw new BadRequestException('Please set your Gemini API key in Settings first');
+    }
+    return user.geminiApiKey;
+  }
+
   /**
    * Create a new batch generation job
    * Supports: character creation, food photography, product with model
@@ -47,6 +57,9 @@ export class BatchController {
     console.log(`👤 [BatchController] User: ${userId}`);
     console.log(`🎯 [BatchController] Type: ${type}`);
     console.log(`📊 [BatchController] Requests: ${requests.length}`);
+
+    // Get user's API key
+    const apiKey = await this.getUserApiKey(userId);
 
     if (!requests || requests.length === 0) {
       throw new BadRequestException('At least one request is required');
@@ -101,13 +114,14 @@ export class BatchController {
       imageBase64: req.imageBase64,
     }));
 
-    // Add to queue
+    // Add to queue with API key
     await this.batchQueue.add('process-batch', {
       batchGenerationId: generation.id,
       userId,
       type,
       requests: batchRequests,
       displayName: displayName || `${type}-${userId}-${Date.now()}`,
+      apiKey,
     });
 
     console.log(`✅ [BatchController] Batch job queued: ${generation.id}`);

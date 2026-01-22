@@ -209,6 +209,12 @@ export default function Veo3PrompterPage() {
     const scene = scenes.find(s => s.id === sceneId);
     if (!scene) return;
 
+    // Check if scene has an image
+    if (!scene.imageUrl) {
+      toast.error('Generate gambar terlebih dahulu sebelum membuat video');
+      return;
+    }
+
     if ((user?.credits || 0) < 10) {
       toast.error('Credits tidak cukup! Butuh 10 credits');
       return;
@@ -218,20 +224,15 @@ export default function Veo3PrompterPage() {
     const toastId = toast.loading(`Generating video scene ${scene.sceneNumber}...`);
 
     try {
-      const characterWithImage = characters.find(c => c.image);
-      let imageBase64 = '';
-      let imageUrl = '';
-      
-      if (scene.imageUrl) {
-        // Use URL directly - backend will download
-        imageUrl = scene.imageUrl;
-      } else if (characterWithImage?.image) {
-        imageBase64 = await fileToBase64(characterWithImage.image);
-      }
+      // Use imageUrl directly - backend will download
+      console.log('Sending to backend:', {
+        imageUrl: scene.imageUrl,
+        prompt: scene.prompt,
+        aspectRatio: selectedRatio,
+      });
 
       const response = await axios.post('/veo/image-to-video', {
-        imageBase64: imageBase64 || undefined,
-        imageUrl: imageUrl || undefined,
+        imageUrl: scene.imageUrl,
         prompt: scene.prompt,
         aspectRatio: selectedRatio,
       });
